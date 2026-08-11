@@ -1,0 +1,10 @@
+psycopg[binary]
+pgvector
+sentence-transformers
+# fastapi
+# uvicorn[standard]
+# python-dotenv
+# httpx
+# pydantic
+
+# pip install supabase

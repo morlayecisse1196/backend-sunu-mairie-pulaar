@@ -1,0 +1,26 @@
+# --- Secrets / environnement ---
+.env
+*.env
+!.env.example
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+venv/
+.venv/
+env/
+
+# --- Données générées / potentiellement sensibles (voix des utilisateurs) ---
+recordings/
+audio_cache/
+audio/
+
+# --- IDE / OS ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# --- Outillage interne (Claude Code) ---
+.claude/
