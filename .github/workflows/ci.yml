@@ -1,0 +1,49 @@
+name: CI
+
+# Déclencheurs : à chaque push sur main, et à chaque pull request visant main.
+# Rien d'autre — pas de déploiement ici, juste de la vérification.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # --- Job 1 : vérification de syntaxe, rapide, sans installer de dépendances ---
+  syntax-check:
+    name: Vérification syntaxe (rapide)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupérer le code du dépôt
+        uses: actions/checkout@v4
+
+      - name: Installer Python 3.12 (même version que le VPS de production)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compiler tous les fichiers .py suivis par git (détecte les erreurs de syntaxe)
+        run: python -m py_compile $(git ls-files '*.py')
+
+  # --- Job 2 : installation réelle des dépendances + import de l'app ---
+  # Ne se lance que si le job 1 a réussi (needs: syntax-check) — pas la peine
+  # d'attendre l'installation complète (plus lente) si le code ne compile même pas.
+  dependencies-check:
+    name: Installation des dépendances + import de l'app
+    runs-on: ubuntu-latest
+    needs: syntax-check
+    steps:
+      - name: Récupérer le code du dépôt
+        uses: actions/checkout@v4
+
+      - name: Installer Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"  # met en cache les paquets téléchargés entre les runs, plus rapide
+
+      - name: Installer les dépendances (exactement comme sur le VPS)
+        run: pip install -r requirements.txt
+
+      - name: Importer l'application (détecte les dépendances manquantes ou les erreurs au chargement)
+        run: python -c "import main; print('main.py importé avec succès')"
