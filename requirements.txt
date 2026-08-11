@@ -1,10 +1,23 @@
-psycopg[binary]
-pgvector
-sentence-transformers
-# fastapi
-# uvicorn[standard]
-# python-dotenv
-# httpx
-# pydantic
+# Dépendances du serveur (main.py et son import chain) — versions figées sur
+# celles déjà prouvées fonctionner ensemble en local. Le TTS et l'ASR tournent
+# sur des services distants (Spaces HF) : pas de torch/transformers ici pour
+# eux, seul sentence-transformers (RAG, embeddings) en tire un en dépendance
+# transitive — c'est attendu.
+fastapi==0.141.1
+uvicorn[standard]==0.52.1
+pydantic==2.13.4
+httpx==0.28.1
+python-dotenv==1.2.2
 
-# pip install supabase
+# Auth Supabase
+supabase==2.31.0
+python-jose[cryptography]==3.5.0
+
+# RAG sémantique (pgvector) — connexion directe Postgres, avec repli sur
+# Supabase REST si injoignable (voir search.py/search2.py dans main.py)
+psycopg[binary]==3.3.4
+pgvector==0.5.0
+sentence-transformers==5.7.0
+
+# --- Dev uniquement (scripts de test locaux, pas nécessaire sur le serveur) ---
+# websockets  # requis par test_audio_ws.py / test_audio_ws_complet.py
