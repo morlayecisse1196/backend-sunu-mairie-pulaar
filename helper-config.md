@@ -33,3 +33,12 @@ visemes	JSON	{"type":"visemes","frames":[...]}	Synchronisation labiale
 
 ## Teste bruno
 ws://localhost:8000/ws/test_session?token=eyJhbG............
+
+POST https://ntmqnhyzpevbfosopmjy.supabase.co/auth/v1/token?grant_type=password
+
+{
+  "email":"morlayecis0003@gmail.com",
+  "password":"motdepasse123"
+}
+
+apiKey = 

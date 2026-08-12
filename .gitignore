@@ -24,3 +24,7 @@ Thumbs.db
 
 # --- Outillage interne (Claude Code) ---
 .claude/
+
+# --- Notes personnelles de déploiement (contiennent des mots de passe réels) ---
+SECURISATION_VPS.md
+doc_vps_hostinger.md

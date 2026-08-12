@@ -10,7 +10,7 @@ load_dotenv()
 
 # Configuration
 # AUDIO_FILE = "C:\\Users\\USER\\Desktop\\DATASET_PULAAR\\RESOURCES\\AUDIO\\whatsapp_audio3.wav"  # Remplacez par votre fichier audio
-AUDIO_FILE = "audio/whatsapp_audio5.wav"  # Fichier audio d'entrée
+AUDIO_FILE = "audio/whatsapp_audio2.wav"  # Fichier audio d'entrée
 # Le token n'est jamais codé en dur : mettez TEST_SUPABASE_TOKEN dans votre .env (fichier non commité)
 TOKEN = os.getenv("TEST_SUPABASE_TOKEN")
 if not TOKEN:
@@ -31,7 +31,8 @@ with open(AUDIO_FILE, "rb") as f_in:
 print(f"📥 Audio d'entrée sauvegardé : {input_audio_path}")
 
 async def test_audio_websocket():
-    uri = f"ws://localhost:8000/ws/test_session?token={TOKEN}"
+    # uri = f"ws://localhost:8000/ws/test_session?token={TOKEN}"
+    uri = f"ws://76.13.134.241:8000/ws/test_session?token={TOKEN}"
     
     try:
         async with websockets.connect(uri) as websocket:
