@@ -23,7 +23,11 @@ jobs:
           python-version: "3.12"
 
       - name: Compiler tous les fichiers .py suivis par git (détecte les erreurs de syntaxe)
-        run: python -m py_compile $(git ls-files '*.py')
+        # git ls-files -z + xargs -0 : les noms de fichiers sont séparés par un octet NUL
+        # (au lieu d'un retour à la ligne) puis xargs les relit avec -0. Nécessaire ici
+        # à cause de "seed_embeddings copy.py" (espace dans le nom) — sans ça, un simple
+        # $(git ls-files '*.py') découpe ce nom en deux arguments au niveau de l'espace.
+        run: git ls-files -z '*.py' | xargs -0 python -m py_compile
 
   # --- Job 2 : installation réelle des dépendances + import de l'app ---
   # Ne se lance que si le job 1 a réussi (needs: syntax-check) — pas la peine
