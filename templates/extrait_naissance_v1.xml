@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  extrait_naissance_v1.xml — Sprint D, Tâche D.1 (MEMOIR2/SUNU_MAIRIE_PROMPTS.md)
+
+  TEMPLATE de génération, PAS un document final : chaque feuille porte un
+  attribut source="..." que le moteur (document_generator.py, Tâche D.2, pas
+  encore écrit) doit résoudre contre l'objet dossier pour produire une
+  instance XML conforme à extrait_naissance.xsd (ce fichier, lui, échouerait
+  la validation XSD tel quel — c'est attendu, ce n'est pas son rôle).
+
+  Structure calquée sur le modèle du pattern décrit dans
+  Flux_Consultant_Generation_Document_SUNU-MAIRIE.md §2.6 (champ/source/
+  obligatoire), mais adaptée : l'exemple du §2.6 est simplifié et antérieur
+  au XSD détaillé (extrait_naissance.xsd précise lui-même qu'il "sert de
+  contrat de données" pour ce moteur). Ici, chaque feuille correspond
+  exactement à un élément du XSD — nécessaire pour qu'une validation XSD ait
+  un sens une fois les valeurs résolues.
+
+  Espace de noms des attributs `source` (convention posée en D.1, RÉVISÉE en
+  construisant D.2 — document_generator.py) :
+    dossier.<slot>      -> dossiers.slots[<slot>]  (rempli par le dialogue vocal)
+    commune.<champ>      -> ligne `communes` liée à dossiers.commune_id
+    formulaire.<champ>    -> document_formulaires.champs[nom=<champ>].valeur,
+                              cherché dans TOUS les formulaires du dossier —
+                              y compris le formulaire "extrait_naissance"
+                              (dossiers_repo.get_or_create_formulaire_acte,
+                              Tâche D.2) pour les champs qui n'appartiennent à
+                              aucun document uploadé (numéro d'acte/registre,
+                              signataire, bloc jugement).
+    systeme.<champ>       -> horodatage/contexte technique (date de génération)
+
+  RÉVISION D.2 (par rapport à D.1) : les préfixes `genere.` et `consultant.`
+  envisagés en D.1 sont ABANDONNÉS. `genere.numero_acte`/`numero_registre`
+  auraient signifié fabriquer un numéro de registre d'état civil — un acte
+  légal doit correspondre à une écriture réelle dans le registre PAPIER que
+  l'officier tient physiquement, l'inventer serait activement trompeur, pas
+  juste une approximation. `consultant.nom` supposait un champ "nom
+  affichable" qui n'existe même pas dans `profiles` (id/commune/role
+  seulement). Les deux sont donc redirigés vers `formulaire.*` (saisie
+  manuelle du consultant, qui a le vrai registre sous les yeux) — même
+  mécanisme de traçabilité (source="manuel") que le reste des champs.
+
+  Champs marqués obligatoire="false" sans source fiable restent VIDES tant
+  que le consultant ne les saisit pas manuellement (Tâche C.3, source
+  "manuel") — jamais devinés/fabriqués par ce template ou le moteur.
+-->
+<document type="extrait_naissance" version="1.0" xsd="extrait_naissance.xsd">
+
+  <numeroActe source="formulaire.numeroActe" obligatoire="true"/>
+
+  <enTeteAdministratif>
+    <region source="commune.region" obligatoire="true"/>
+    <departement source="commune.departement" obligatoire="true"/>
+    <!-- Facultatif : absent de l'acte de Tambacounda. -->
+    <arrondissement source="commune.arrondissement" obligatoire="false"/>
+    <collectiviteLocale source="commune.nom" obligatoire="true"/>
+    <typeCentre source="formulaire.typeCentre" obligatoire="false"/>
+    <nomCentreEtatCivil source="commune.nom" obligatoire="true"/>
+  </enTeteAdministratif>
+
+  <informationsRegistre>
+    <!-- "En toutes lettres" : jamais généré automatiquement depuis le chiffre
+         (conversion nombre -> texte français non fiable à improviser) —
+         toujours une saisie manuelle du consultant en V1. -->
+    <anneeRegistreLettres source="formulaire.anneeRegistreLettres" obligatoire="true"/>
+    <anneeRegistreChiffres source="formulaire.anneeRegistreChiffres" obligatoire="true"/>
+    <numeroRegistreLettres source="formulaire.numeroRegistreLettres" obligatoire="true"/>
+    <numeroRegistreChiffres source="formulaire.numeroRegistreChiffres" obligatoire="true"/>
+  </informationsRegistre>
+
+  <acteNaissance>
+    <dateNaissanceLettres source="formulaire.dateNaissanceLettres" obligatoire="true"/>
+    <dateNaissance source="dossier.date_naissance_enfant" format="aaaa-mm-jj" obligatoire="true"/>
+    <heureNaissance source="formulaire.heureNaissance" obligatoire="false"/>
+    <lieuNaissance source="dossier.commune_naissance" obligatoire="true"/>
+    <!-- Saisie du consultant d'abord, sinon la réponse du dialogue.
+         Stocké M/F (XSD), imprimé MASCULIN/FÉMININ. -->
+    <sexe source="formulaire.sexe|dossier.sexe_enfant" obligatoire="true"/>
+    <!-- dossier.nom_enfant est un nom complet non scindé (cf. dialogue_engine.py) :
+         prenomEnfant/nomFamilleEnfant n'ont pas de source fiable, toujours manuel -->
+    <prenomEnfant source="formulaire.prenomEnfant" obligatoire="true"/>
+    <nomFamilleEnfant source="formulaire.nomFamilleEnfant" obligatoire="true"/>
+    <prenomPere source="formulaire.prenomPere" obligatoire="false"/>
+    <prenomMere source="formulaire.prenomMere" obligatoire="true"/>
+    <nomFamilleMere source="formulaire.nomFamilleMere" obligatoire="true"/>
+    <paysNaissanceEtranger source="formulaire.paysNaissanceEtranger" obligatoire="false"/>
+  </acteNaissance>
+
+  <!-- Présent uniquement si dossier.cas_legal == "jugement_requis" (cf. XSD :
+       "un acte supplétif DOIT porter le bloc jugementSupplement"). Le passage
+       au tribunal reste une démarche physique (décision actée §1, Q1) : aucun
+       de ces champs n'est collecté par le dialogue vocal, tous manuels. -->
+  <jugementSupplement conditionnel="dossier.cas_legal == jugement_requis">
+    <tribunalOuJuge source="formulaire.tribunalOuJuge" obligatoire="true"/>
+    <dateJugementLettres source="formulaire.dateJugementLettres" obligatoire="true"/>
+    <numeroJugementLettres source="formulaire.numeroJugementLettres" obligatoire="true"/>
+    <numeroJugementChiffres source="formulaire.numeroJugementChiffres" obligatoire="true"/>
+    <dateInscriptionRegistre source="formulaire.dateInscriptionRegistre" obligatoire="true"/>
+    <anneeJugement source="formulaire.anneeJugement" obligatoire="true"/>
+  </jugementSupplement>
+
+  <delivrance>
+    <centreDelivrance source="commune.nom" obligatoire="true"/>
+    <lieuDelivrance source="commune.nom" obligatoire="true"/>
+    <dateDelivrance source="systeme.date_generation" format="aaaa-mm-jj" obligatoire="true"/>
+    <!-- Signataire : saisi manuellement (pas de champ "nom affichable" dans
+         `profiles`, cf. révision D.2 en tête de fichier). Réutilisé si le
+         tampon numérique par commune est appliqué automatiquement, V2 §5.4. -->
+    <officierEtatCivil source="formulaire.officierEtatCivil" obligatoire="true"/>
+    <notesMentionsMarginales source="formulaire.notesMentionsMarginales" obligatoire="false"/>
+  </delivrance>
+
+</document>

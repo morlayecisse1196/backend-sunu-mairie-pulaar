@@ -1,0 +1,236 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           targetNamespace="http://sunu-mairie.sn/schemas/extrait-naissance"
+           xmlns:tns="http://sunu-mairie.sn/schemas/extrait-naissance"
+           elementFormDefault="qualified">
+
+  <xs:annotation>
+    <xs:documentation>
+      Schéma XML (XSD) définissant la structure et les règles de validation
+      d'un extrait du registre des actes de naissance (République du
+      Sénégal). Construit à partir de deux modèles réels :
+      - formulaire vierge, Commune de Dindéfélo (Kédougou)
+      - extrait rempli, Centre principal de Ross-Béthio (Saint-Louis)
+      Projet SUNU-MAIRIE — sert de contrat de données pour le moteur de
+      génération de document décrit dans Flux_Consultant_Generation_Document.
+    </xs:documentation>
+  </xs:annotation>
+
+  <!-- ===================== TYPES SIMPLES ===================== -->
+
+  <xs:simpleType name="TexteCourt">
+    <xs:annotation>
+      <xs:documentation>Noms de lieux, prénoms, noms de famille — bornés à 100 caractères par prudence (accents/particules compris).</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:minLength value="1"/>
+      <xs:maxLength value="100"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="TexteLong">
+    <xs:annotation>
+      <xs:documentation>Champs "en toutes lettres" du formulaire (dates, numéros écrits) — plus longs que les champs identité.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:minLength value="1"/>
+      <xs:maxLength value="300"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="Sexe">
+    <xs:annotation>
+      <xs:documentation>Correspond à la case "I M I ou I F I" du formulaire.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="M"/>
+      <xs:enumeration value="F"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="AnneeQuatreChiffres">
+    <xs:restriction base="xs:gYear">
+      <xs:minInclusive value="1900"/>
+      <xs:maxInclusive value="2100"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="HeureNaissance">
+    <xs:annotation>
+      <xs:documentation>Format HH:MM 24h. Optionnel : le champ "heure(s)...minute(s)" du formulaire est parfois laissé vide dans la pratique (accouchements non médicalisés).</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:pattern value="([01][0-9]|2[0-3]):[0-5][0-9]"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="NumeroActe">
+    <xs:annotation>
+      <xs:documentation>
+        Correspond à la suite de cases numérotées en bas du formulaire
+        officiel ("ERVE 1 |_|_|_|..."). NOMBRE EXACT DE CHIFFRES NON
+        CONFIRMÉ sur les deux modèles disponibles — estimé à 19 chiffres
+        d'après le comptage des cases visibles sur le formulaire vierge.
+        À FAIRE VALIDER auprès du service d'état civil avant mise en
+        production (cf. section "hypothèses à valider").
+      </xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[0-9]{19}"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="TypeCentre">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="principal"/>
+      <xs:enumeration value="secondaire"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- ===================== TYPES COMPLEXES ===================== -->
+
+  <xs:complexType name="EnTeteAdministratif">
+    <xs:annotation>
+      <xs:documentation>Bloc supérieur gauche du formulaire : découpage administratif du centre d'état civil émetteur.</xs:documentation>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:element name="region" type="tns:TexteCourt"/>
+      <xs:element name="departement" type="tns:TexteCourt"/>
+      <!-- Facultatif : l'acte de Tambacounda n'affiche que Région / Département / Commune. -->
+      <xs:element name="arrondissement" type="tns:TexteCourt" minOccurs="0"/>
+      <xs:element name="collectiviteLocale" type="tns:TexteCourt">
+        <xs:annotation>
+          <xs:documentation>Commune ou communauté rurale (les deux modèles utilisent l'un ou l'autre libellé).</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="typeCentre" type="tns:TypeCentre" minOccurs="0"/>
+      <xs:element name="nomCentreEtatCivil" type="tns:TexteCourt">
+        <xs:annotation>
+          <xs:documentation>Ex. "Ross-Béthio" ou "Dindéfélo" — le nom qui suit "CENTRE DE (1)".</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="InformationsRegistre">
+    <xs:annotation>
+      <xs:documentation>Bloc "Sur l'année..." / "Dans le registre..." — références d'inscription au registre.</xs:documentation>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:element name="anneeRegistreLettres" type="tns:TexteLong">
+        <xs:annotation><xs:documentation>Ex. "Mille neuf cent soixante sept"</xs:documentation></xs:annotation>
+      </xs:element>
+      <xs:element name="anneeRegistreChiffres" type="tns:AnneeQuatreChiffres"/>
+      <xs:element name="numeroRegistreLettres" type="tns:TexteLong">
+        <xs:annotation><xs:documentation>Ex. "Cent quatre vingt quatorze"</xs:documentation></xs:annotation>
+      </xs:element>
+      <xs:element name="numeroRegistreChiffres" type="xs:positiveInteger"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="ActeNaissance">
+    <xs:annotation>
+      <xs:documentation>Corps principal du formulaire : les faits d'état civil proprement dits.</xs:documentation>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:element name="dateNaissanceLettres" type="tns:TexteLong">
+        <xs:annotation>
+          <xs:documentation>Ex. "quatorze octobre mille neuf cent soixante sept" — reproduit tel qu'écrit sur l'acte source.</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="dateNaissance" type="xs:date">
+        <xs:annotation>
+          <xs:documentation>Forme normalisée AAAA-MM-JJ, dérivée de dateNaissanceLettres pour les besoins du système (recherche, calcul de cas légal RG1/RG2/RG3).</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="heureNaissance" type="tns:HeureNaissance" minOccurs="0"/>
+      <xs:element name="lieuNaissance" type="tns:TexteCourt"/>
+      <xs:element name="sexe" type="tns:Sexe"/>
+      <xs:element name="prenomEnfant" type="tns:TexteCourt"/>
+      <xs:element name="nomFamilleEnfant" type="tns:TexteCourt"/>
+      <xs:element name="prenomPere" type="tns:TexteCourt" minOccurs="0">
+        <xs:annotation>
+          <xs:documentation>Optionnel : les deux modèles ne renseignent que le prénom du père (pas de nom de famille distinct sur le formulaire — souvent identique à celui de l'enfant).</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="prenomMere" type="tns:TexteCourt"/>
+      <xs:element name="nomFamilleMere" type="tns:TexteCourt"/>
+      <xs:element name="paysNaissanceEtranger" type="tns:TexteCourt" minOccurs="0">
+        <xs:annotation>
+          <xs:documentation>Renseigné uniquement si l'enfant est né hors du Sénégal ("...de naissance pour les naissances à l'étranger (3)").</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="JugementSupplement">
+    <xs:annotation>
+      <xs:documentation>
+        Bloc gauche/bas "SEMENT AUTORISATION INSCRIPTION - SUPPLETIF".
+        Présent UNIQUEMENT si typeActe="supplétif" (correspond au cas
+        légal "jugement_requis" du DSF) — sur le modèle Ross-Béthio ce
+        bloc est laissé vide car l'acte y est ordinaire.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:element name="tribunalOuJuge" type="tns:TexteCourt">
+        <xs:annotation><xs:documentation>Ex. "TRIBUNAL D'INSTANCE DE KEDOUGOU" ou "le juge de Paix de..."</xs:documentation></xs:annotation>
+      </xs:element>
+      <xs:element name="dateJugementLettres" type="tns:TexteLong"/>
+      <xs:element name="numeroJugementLettres" type="tns:TexteLong"/>
+      <xs:element name="numeroJugementChiffres" type="xs:positiveInteger"/>
+      <xs:element name="dateInscriptionRegistre" type="xs:date"/>
+      <xs:element name="anneeJugement" type="tns:AnneeQuatreChiffres"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="Delivrance">
+    <xs:annotation>
+      <xs:documentation>Pied du document : circonstances de délivrance de l'extrait (peut différer du centre d'enregistrement d'origine, cf. Ross-Béthio délivré par Ndiaye).</xs:documentation>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:element name="centreDelivrance" type="tns:TexteCourt"/>
+      <xs:element name="lieuDelivrance" type="tns:TexteCourt"/>
+      <xs:element name="dateDelivrance" type="xs:date"/>
+      <xs:element name="officierEtatCivil" type="tns:TexteCourt">
+        <xs:annotation><xs:documentation>Prénom et nom du signataire ("Prénoms et Nom" en bas de l'acte).</xs:documentation></xs:annotation>
+      </xs:element>
+      <xs:element name="notesMentionsMarginales" type="tns:TexteLong" minOccurs="0">
+        <xs:annotation><xs:documentation>Renvoie aux notes (1)(2)(3) "au verso" du formulaire.</xs:documentation></xs:annotation>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- ===================== ELEMENT RACINE ===================== -->
+
+  <xs:element name="extraitNaissance">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="numeroActe" type="tns:NumeroActe"/>
+        <xs:element name="enTeteAdministratif" type="tns:EnTeteAdministratif"/>
+        <xs:element name="informationsRegistre" type="tns:InformationsRegistre"/>
+        <xs:element name="acteNaissance" type="tns:ActeNaissance"/>
+        <xs:element name="jugementSupplement" type="tns:JugementSupplement" minOccurs="0"/>
+        <xs:element name="delivrance" type="tns:Delivrance"/>
+      </xs:sequence>
+      <xs:attribute name="typeActe" use="required">
+        <xs:annotation>
+          <xs:documentation>"ordinaire" = déclaration normale/tardive en mairie ; "supplétif" = via jugement d'autorisation (impose jugementSupplement).</xs:documentation>
+        </xs:annotation>
+        <xs:simpleType>
+          <xs:restriction base="xs:string">
+            <xs:enumeration value="ordinaire"/>
+            <xs:enumeration value="supplétif"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:attribute>
+    </xs:complexType>
+
+    <!-- Règle métier : un acte supplétif DOIT porter le bloc jugementSupplement -->
+    <xs:unique name="uniciteNumeroActe">
+      <xs:selector xpath="."/>
+      <xs:field xpath="tns:numeroActe"/>
+    </xs:unique>
+  </xs:element>
+
+</xs:schema>

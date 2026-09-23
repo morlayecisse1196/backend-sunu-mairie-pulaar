@@ -1,9 +1,10 @@
 ## dépendance python-jose
 >> pip install python-jose
 >> pip install soundfile
+>> pip install psycopg
 
 ## commande lancement
->> uvicorn main:app --reload --port 8000
+>>  .\venv\Scripts\python.exe -m uvicorn main:app --reload --host 0.0.0.0 --port 8000 --ws-ping-interval 20 --ws-ping-timeout 20
 
 ## Lancement recommandé (avec keep-alive WebSocket)
 Sur mobile (4G/WiFi instable), sans ping/pong protocole, une connexion à moitié coupée
@@ -12,7 +13,6 @@ les ping/pong au niveau du protocole WebSocket (transparents pour le client — 
 WebSocket / web_socket_channel y répond automatiquement) :
 >> uvicorn main:app --reload --port 8000 --ws-ping-interval 20 --ws-ping-timeout 20
 En production (sans --reload), utiliser cette commande.
-
 
 ## Remarque 
 À retenir pour l'intégration Flutter
@@ -42,3 +42,7 @@ POST https://ntmqnhyzpevbfosopmjy.supabase.co/auth/v1/token?grant_type=password
 }
 
 apiKey = 
+
+ADMIN
+EMAIL=admin.test.g1@sunu-mairie.local
+PASSWORD=QiK8Imj30JoWLVYn

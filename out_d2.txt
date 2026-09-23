@@ -1,0 +1,27 @@
+Loading weights:   0%|          | 0/199 [00:00<?, ?it/s]Loading weights: 100%|##########| 199/199 [00:00<00:00, 2571.33it/s]
+
+(process:17972): GLib-GIO-WARNING **: 09:43:13.335: Unexpectedly, UWP app `Microsoft.OutlookForWindows_1.2025.716.500_x64__8wekyb3d8bbwe' (AUMId `Microsoft.OutlookForWindows_8wekyb3d8bbwe!Microsoft.OutlookforWindows') supports 4 extensions but has no verbs
+
+(process:17972): GLib-GIO-WARNING **: 09:43:14.206: Unexpectedly, UWP app `Microsoft.ScreenSketch_11.2602.49.0_x64__8wekyb3d8bbwe' (AUMId `Microsoft.ScreenSketch_8wekyb3d8bbwe!App') supports 29 extensions but has no verbs
+
+(process:17972): GLib-GIO-WARNING **: 09:43:14.281: Unexpectedly, UWP app `Clipchamp.Clipchamp_4.5.10920.0_x64__yxz26nhyzhsrt' (AUMId `Clipchamp.Clipchamp_yxz26nhyzhsrt!App') supports 41 extensions but has no verbs
+
+(process:17972): GLib-GIO-WARNING **: 09:43:14.468: Unexpectedly, UWP app `PythonSoftwareFoundation.PythonManager_26.3.240.0_x64__3847v3x7pw1km' (AUMId `PythonSoftwareFoundation.PythonManager_3847v3x7pw1km!Python.Exe') supports 4 extensions but has no verbs
+
+(process:17972): GLib-GIO-WARNING **: 09:43:14.469: Unexpectedly, UWP app `PythonSoftwareFoundation.PythonManager_26.3.240.0_x64__3847v3x7pw1km' (AUMId `PythonSoftwareFoundation.PythonManager_3847v3x7pw1km!Pythonw.Exe') supports 2 extensions but has no verbs
+=== 1. Dossier complet : résolution + XSD + HTML ===
+Erreurs de résolution : []
+Erreurs XSD : []
+✅ Résolution + validation XSD réussies.
+✅ HTML rendu contient le bandeau + les valeurs attendues (critère de validation, version texte).
+⚠️ generer_document() a réussi malgré l'absence attendue de weasyprint — vérifier l'environnement.
+
+=== 2. Dossier incomplet : échec explicite + CasParticulier ===
+✅ Échec explicite : Champs obligatoires manquants : numeroActe (source=formulaire.numeroActe), anneeRegistreLettres (source=formulaire.anneeRegistreLettres), anneeRegistreChiffres (source=formulaire.anneeRegistreChiffres), numeroRegistreLettres (source=formulaire.numeroRegistreLettres), numeroRegistreChiffres (source=formulaire.numeroRegistreChiffres), dateNaissanceLettres (source=formulaire.dateNaissanceLettres), dateNaissance (source=dossier.date_naissance_enfant), lieuNaissance (source=dossier.commune_naissance), sexe (source=formulaire.sexe), prenomEnfant (source=formulaire.prenomEnfant), nomFamilleEnfant (source=formulaire.nomFamilleEnfant), prenomMere (source=formulaire.prenomMere), nomFamilleMere (source=formulaire.nomFamilleMere), officierEtatCivil (source=formulaire.officierEtatCivil)
+✅ CasParticulier créé en base : champs_obligatoires_manquants
+
+=== 3. Dossier complet mais numeroActe malformé : échec XSD spécifique ===
+✅ Échec explicite (validation XSD, pas 'champs manquants') : Validation XSD échouée : <string>:0:0:ERROR:SCHEMASV:SCHEMAV_CVC_PATTERN_VALID: Element '{http://sunu-mairie.sn/schemas/extrait-naissance}numeroActe': [facet 'pattern'] The value '123' is not accepted by the pattern '[0-9]{19}'., <string>:0:0:ERROR:SCHEMASV:SCHEMAV_CVC_IDC: Element '{http://sunu-mairie.sn/schemas/extrait-naissance}numeroActe': Warning: No precomputed value available, the value was either invalid or something strange happened.
+✅ CasParticulier créé avec le bon type_incident : validation_xsd_echouee
+
+✅ Tâche D.2 : pipeline de génération validé jusqu'à l'étape PDF (bloquée localement par l'environnement Windows, pas par le code)

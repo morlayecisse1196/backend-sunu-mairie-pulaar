@@ -1,0 +1,4 @@
+# Outillage de tests (dev + CI) — pas nécessaire sur le serveur de production.
+-r requirements.txt
+pytest==8.4.2
+pytest-asyncio==1.2.0

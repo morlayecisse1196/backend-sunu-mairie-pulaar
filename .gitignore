@@ -15,6 +15,11 @@ env/
 recordings/
 audio_cache/
 audio/
+debug_audio_recu/
+
+# --- Photos de CNI réelles utilisées pour valider l'OCR (Sprint K) — PII réelle,
+# jamais commitée (nom, numéro de carte, NIN, adresse d'une vraie personne) ---
+model_OCR/image_cni-exmple/
 
 # --- IDE / OS ---
 .vscode/

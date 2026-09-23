@@ -8,6 +8,7 @@ uvicorn[standard]==0.52.1
 pydantic==2.13.4
 httpx==0.28.1
 python-dotenv==1.2.2
+python-multipart==0.0.32  # requis par FastAPI pour les endpoints multipart (Form/UploadFile, Tâche B.5)
 
 # Auth Supabase
 supabase==2.31.0
@@ -19,5 +20,28 @@ psycopg[binary]==3.3.4
 pgvector==0.5.0
 sentence-transformers==5.7.0
 
+# Génération de document (Sprint D) — validation XSD des données résolues
+# avant injection dans le template HTML/PDF (voir templates/*.xsd)
+lxml==6.1.1
+jinja2==3.1.6
+weasyprint==69.0
+# weasyprint a besoin de bibliothèques système (Pango/GObject/Cairo) — sur le
+# VPS (Debian/Ubuntu) : apt install libpango-1.0-0 libpangocairo-1.0-0
+# libcairo2 libgdk-pixbuf2.0-0. Absentes par défaut sous Windows (dev local),
+# cf. document_generator.py pour comment le code s'en accommode.
+
+# OCR CNI (Sprint K) — modèle YOLOv8s + EasyOCR, intégré in-process dans
+# backend-agent (décision actée : pas un nouveau Space HF séparé, cf.
+# ocr_cni_service.py). ultralytics==8.3.0 pinnait numpy<2.0 (incompatible
+# avec le numpy 2.x déjà installé par sentence-transformers, et sans wheel
+# pré-compilé pour Python 3.14 — build source impossible sans compilateur C
+# sur Windows) : 8.4.138 (dernière version testée) n'a plus cette contrainte.
+# Fait remonter torch 2.13->2.14 (dépendance transitive d'easyocr) — revérifié
+# que sentence-transformers fonctionne toujours avec cette version.
+ultralytics==8.4.138
+easyocr==1.7.2
+opencv-python==4.11.0.86
+
 # --- Dev uniquement (scripts de test locaux, pas nécessaire sur le serveur) ---
 # websockets  # requis par test_audio_ws.py / test_audio_ws_complet.py
+# pypdf       # requis par test_document_generator.py (relecture du texte du PDF généré)

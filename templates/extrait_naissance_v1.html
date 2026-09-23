@@ -1,0 +1,287 @@
+<!--
+  extrait_naissance_v1.html — Sprint D, Tâche D.1
+
+  Template Jinja2 (choix de moteur pour D.2, cohérent avec la combinaison
+  standard WeasyPrint+Python — pas encore une dépendance de requirements.txt,
+  ce sera à D.2 de l'ajouter avec le vrai moteur de résolution) : les
+  variables entre doubles accolades sont injectées par document_generator.py
+  après résolution des `source="..."` du template XML (extrait_naissance_v1.xml,
+  même Tâche).
+
+  Mise en page reproduite depuis le formulaire vierge de la commune de
+  Dindéfélo (photo fournie) et les deux XML d'exemple (contenu/disposition) —
+  fidèle dans l'esprit (zones, regroupements, libellés), pas un fac-similé
+  pixel pour pixel : ce que le consultant doit pouvoir reconnaître et
+  comparer à l'image source, pas reproduire au trait près.
+
+  RAPPEL LÉGAL (cf. roadmap §5.4) : ce document porte un bandeau "brouillon
+  officiel" — il n'a AUCUNE valeur légale par lui-même en V1. Ne jamais
+  retirer ce bandeau sans que le mécanisme de tampon numérique (V2) et sa
+  validation par une autorité compétente ne soient effectifs.
+-->
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Extrait de naissance — {{ prenomEnfant }} {{ nomFamilleEnfant }}</title>
+<style>
+  @page {
+    size: A4;
+    margin: 15mm 12mm;
+  }
+  body {
+    font-family: "Helvetica Neue", Arial, sans-serif;
+    font-size: 10.5pt;
+    color: #111;
+    margin: 0;
+  }
+  .filigrane {
+    text-align: center;
+    background: #fdf3d0;
+    border: 1px solid #c9a227;
+    color: #6b4e00;
+    font-weight: bold;
+    font-size: 9.5pt;
+    padding: 4px 8px;
+    margin-bottom: 6mm;
+  }
+  .entete {
+    display: flex;
+    border: 1px solid #000;
+  }
+  .entete-gauche, .entete-droite {
+    padding: 6px 10px;
+    width: 50%;
+  }
+  .entete-gauche { border-right: 1px solid #000; }
+  .entete-gauche p { margin: 2px 0; text-transform: uppercase; font-size: 9.5pt; }
+  .entete-droite { text-align: center; }
+  .entete-droite .republique { font-size: 9.5pt; margin: 2px 0; }
+  .entete-droite .eta-civil { font-size: 22pt; font-weight: bold; letter-spacing: 2px; margin: 4px 0; }
+  .entete-droite .centre { font-size: 9.5pt; margin-top: 4px; }
+
+  .bloc-titre {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    border: 1px solid #000;
+    border-top: none;
+    padding: 8px 10px;
+  }
+  .titre-principal { font-weight: bold; font-size: 12pt; max-width: 70%; }
+  .numero-acte-box {
+    border: 1px solid #000;
+    padding: 4px 8px;
+    text-align: center;
+    font-size: 8.5pt;
+  }
+  .numero-acte-box .an { font-weight: bold; font-size: 11pt; }
+
+  .bloc-registre {
+    border: 1px solid #000;
+    border-top: none;
+    padding: 8px 10px;
+    font-size: 9.5pt;
+  }
+  .champ-souligne { border-bottom: 1px dotted #000; display: inline-block; min-width: 55%; }
+  .mention-lettres { font-style: italic; font-size: 8pt; color: #444; text-align: center; display: block; }
+
+  .bloc-corps {
+    border: 1px solid #000;
+    border-top: none;
+    padding: 10px;
+  }
+  .ligne { display: flex; justify-content: space-between; margin-bottom: 8px; }
+  .champ-label { font-size: 8.5pt; text-transform: uppercase; color: #333; }
+  .champ-valeur {
+    border: 1px solid #000;
+    padding: 3px 6px;
+    min-width: 45%;
+    font-weight: bold;
+  }
+  .demi { width: 48%; }
+
+  .bloc-jugement {
+    border: 1px solid #000;
+    border-top: none;
+    padding: 8px 10px;
+    font-size: 9.5pt;
+  }
+  .bloc-jugement .titre-jugement { font-weight: bold; font-size: 8.5pt; }
+  .sans-objet { color: #777; font-style: italic; }
+
+  .bloc-pied {
+    border: 1px solid #000;
+    border-top: none;
+    padding: 8px 10px;
+    display: flex;
+    justify-content: space-between;
+    font-size: 9pt;
+  }
+
+  .bloc-erve {
+    border: 1px solid #000;
+    border-top: none;
+    padding: 6px 10px;
+    font-size: 8pt;
+  }
+  .digits { display: flex; gap: 2px; margin-top: 3px; }
+  .digit-box {
+    border: 1px solid #000;
+    width: 5mm;
+    height: 6mm;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+  }
+</style>
+</head>
+<body>
+
+  <div class="filigrane">
+    DOCUMENT GÉNÉRÉ — BROUILLON OFFICIEL, À AUTHENTIFIER PAR L'OFFICIER D'ÉTAT CIVIL
+    — Suivi : {{ numero_suivi }}
+  </div>
+
+  <div class="entete">
+    <div class="entete-gauche">
+      <p>Région de {{ region }}</p>
+      <p>Département de {{ departement }}</p>
+      {% if arrondissement %}<p>Arrondissement de {{ arrondissement }}</p>{% endif %}
+      <p>Commune de {{ collectiviteLocale }}</p>
+    </div>
+    <div class="entete-droite">
+      <p class="republique">République du Sénégal</p>
+      <p class="republique">Un Peuple – Un But – Une Foi</p>
+      <p class="eta-civil">ÉTAT CIVIL</p>
+      <p class="centre">Centre de {% if typeCentre %}{{ typeCentre }}{% endif %} — {{ nomCentreEtatCivil }}</p>
+    </div>
+  </div>
+
+  <div class="bloc-titre">
+    <div class="titre-principal">Extrait du registre des actes de naissance</div>
+    <div class="numero-acte-box">
+      <div class="an">AN {{ anneeRegistreChiffres }}</div>
+      <div>(N° dans le registre en chiffres)</div>
+      <div>{{ numeroRegistreChiffres }}</div>
+    </div>
+  </div>
+
+  <div class="bloc-registre">
+    <div>Sur l'année <span class="champ-valeur">{{ anneeRegistreLettres }}</span></div>
+    <span class="mention-lettres">(en lettres)</span>
+    <div>Dans le registre <span class="champ-valeur">{{ numeroRegistreLettres }}</span></div>
+    <span class="mention-lettres">(en lettres)</span>
+  </div>
+
+  <div class="bloc-corps">
+    <div class="ligne">
+      <div class="demi">
+        <span class="champ-label">Né(e) le (en lettres) :</span><br>
+        <span class="champ-valeur">{{ dateNaissanceLettres }}</span>
+      </div>
+      <div class="demi">
+        <span class="champ-label">Date / heure :</span><br>
+        <span class="champ-valeur">{{ dateNaissance }}{% if heureNaissance %} — {{ heureNaissance }}{% endif %}</span>
+      </div>
+    </div>
+
+    <div class="ligne">
+      <div class="demi">
+        <span class="champ-label">Enfant de sexe :</span>
+        <span class="champ-valeur">{{ sexe_lettres }}</span>
+      </div>
+      <div class="demi">
+        <span class="champ-label">Lieu de naissance :</span><br>
+        <span class="champ-valeur">{{ lieuNaissance }}</span>
+      </div>
+    </div>
+
+    <div class="ligne">
+      <div class="demi">
+        <span class="champ-label">Prénom de l'enfant :</span><br>
+        <span class="champ-valeur">{{ prenomEnfant }}</span>
+      </div>
+      <div class="demi">
+        <span class="champ-label">Nom de famille :</span><br>
+        <span class="champ-valeur">{{ nomFamilleEnfant }}</span>
+      </div>
+    </div>
+
+    <div class="ligne">
+      <div class="demi">
+        <span class="champ-label">Prénom du père :</span><br>
+        <span class="champ-valeur">{% if prenomPere %}{{ prenomPere }}{% else %}—{% endif %}</span>
+      </div>
+      <div class="demi"></div>
+    </div>
+
+    <div class="ligne">
+      <div class="demi">
+        <span class="champ-label">Prénom de la mère :</span><br>
+        <span class="champ-valeur">{{ prenomMere }}</span>
+      </div>
+      <div class="demi">
+        <span class="champ-label">Nom de famille de la mère :</span><br>
+        <span class="champ-valeur">{{ nomFamilleMere }}</span>
+      </div>
+    </div>
+
+    {% if paysNaissanceEtranger %}
+    <div class="ligne">
+      <div class="demi" style="width:100%">
+        <span class="champ-label">Naissance à l'étranger — pays :</span>
+        <span class="champ-valeur">{{ paysNaissanceEtranger }}</span>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="bloc-jugement">
+    <div class="titre-jugement">Jugement d'autorisation d'inscription — supplétif</div>
+    {% if jugement_requis %}
+    <div class="ligne">
+      <div class="demi">
+        <span class="champ-label">Tribunal / juge :</span> <span class="champ-valeur">{{ tribunalOuJuge }}</span>
+      </div>
+      <div class="demi">
+        <span class="champ-label">Année du jugement :</span> <span class="champ-valeur">{{ anneeJugement }}</span>
+      </div>
+    </div>
+    <div class="ligne">
+      <div class="demi">
+        <span class="champ-label">Le (en lettres) :</span> <span class="champ-valeur">{{ dateJugementLettres }}</span>
+      </div>
+      <div class="demi">
+        <span class="champ-label">Sous le n° :</span>
+        <span class="champ-valeur">{{ numeroJugementLettres }} ({{ numeroJugementChiffres }})</span>
+      </div>
+    </div>
+    <div class="ligne">
+      <div class="demi" style="width:100%">
+        <span class="champ-label">Inscrit le, sur les registres de l'année {{ anneeJugement }} :</span>
+        <span class="champ-valeur">{{ dateInscriptionRegistre }}</span>
+      </div>
+    </div>
+    {% else %}
+    <div class="sans-objet">Sans objet (acte ordinaire — pas de jugement supplétif)</div>
+    {% endif %}
+  </div>
+
+  <div class="bloc-pied">
+    <div>(1)(2)(3) Notes et mentions marginales au verso{% if notesMentionsMarginales %} : {{ notesMentionsMarginales }}{% endif %}</div>
+    <div>Prénom et Nom : <strong>{{ officierEtatCivil }}</strong><br>Délivré à {{ lieuDelivrance }}, le {{ dateDelivrance }}</div>
+  </div>
+
+  <div class="bloc-erve">
+    ERVE 1
+    <div class="digits">
+      {% for chiffre in numeroActe %}
+      <div class="digit-box">{{ chiffre }}</div>
+      {% endfor %}
+    </div>
+  </div>
+
+</body>
+</html>

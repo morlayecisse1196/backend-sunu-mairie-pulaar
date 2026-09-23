@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Exemple conforme à extrait_naissance.xsd — cas "supplétif" (jugement
+  d'autorisation d'inscription), sur la base de la structure du
+  formulaire vierge de Dindéfélo (Kédougou). Données fictives pour
+  illustrer le remplissage du bloc jugementSupplement.
+-->
+<extraitNaissance xmlns="http://sunu-mairie.sn/schemas/extrait-naissance"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://sunu-mairie.sn/schemas/extrait-naissance extrait_naissance.xsd"
+                   typeActe="supplétif">
+
+  <numeroActe>0000000000000000087</numeroActe>
+
+  <enTeteAdministratif>
+    <region>Kédougou</region>
+    <departement>Kédougou</departement>
+    <arrondissement>Bandafassi</arrondissement>
+    <collectiviteLocale>Dindéfélo</collectiviteLocale>
+    <typeCentre>principal</typeCentre>
+    <nomCentreEtatCivil>Dindéfélo</nomCentreEtatCivil>
+  </enTeteAdministratif>
+
+  <informationsRegistre>
+    <anneeRegistreLettres>Deux mille vingt-six</anneeRegistreLettres>
+    <anneeRegistreChiffres>2026</anneeRegistreChiffres>
+    <numeroRegistreLettres>Quatre-vingt-sept</numeroRegistreLettres>
+    <numeroRegistreChiffres>87</numeroRegistreChiffres>
+  </informationsRegistre>
+
+  <acteNaissance>
+    <dateNaissanceLettres>neuf août deux mille vingt-six</dateNaissanceLettres>
+    <dateNaissance>2026-08-09</dateNaissance>
+    <heureNaissance>06:40</heureNaissance>
+    <lieuNaissance>Dindéfélo</lieuNaissance>
+    <sexe>M</sexe>
+    <prenomEnfant>Ibrahima</prenomEnfant>
+    <nomFamilleEnfant>Diallo</nomFamilleEnfant>
+    <prenomPere>Modou</prenomPere>
+    <prenomMere>Aïssatou</prenomMere>
+    <nomFamilleMere>Ba</nomFamilleMere>
+  </acteNaissance>
+
+  <jugementSupplement>
+    <tribunalOuJuge>Tribunal d'Instance de Kédougou</tribunalOuJuge>
+    <dateJugementLettres>vingt octobre deux mille vingt-six</dateJugementLettres>
+    <numeroJugementLettres>trente-deux</numeroJugementLettres>
+    <numeroJugementChiffres>32</numeroJugementChiffres>
+    <dateInscriptionRegistre>2026-10-25</dateInscriptionRegistre>
+    <anneeJugement>2026</anneeJugement>
+  </jugementSupplement>
+
+  <delivrance>
+    <centreDelivrance>Dindéfélo</centreDelivrance>
+    <lieuDelivrance>Dindéfélo</lieuDelivrance>
+    <dateDelivrance>2026-10-28</dateDelivrance>
+    <officierEtatCivil>À compléter</officierEtatCivil>
+  </delivrance>
+
+</extraitNaissance>

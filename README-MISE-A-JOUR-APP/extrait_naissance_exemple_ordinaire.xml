@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Exemple conforme à extrait_naissance.xsd, transcrit à partir de
+  l'extrait de naissance réel du centre de Ross-Béthio (Dagana,
+  Saint-Louis) — cas "ordinaire" (pas de jugement supplétif).
+-->
+<extraitNaissance xmlns="http://sunu-mairie.sn/schemas/extrait-naissance"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://sunu-mairie.sn/schemas/extrait-naissance extrait_naissance.xsd"
+                   typeActe="ordinaire">
+
+  <numeroActe>0000000000000000194</numeroActe>
+
+  <enTeteAdministratif>
+    <region>Saint-Louis</region>
+    <departement>Dagana</departement>
+    <arrondissement>Ndiaye</arrondissement>
+    <collectiviteLocale>Ross-Béthio</collectiviteLocale>
+    <typeCentre>principal</typeCentre>
+    <nomCentreEtatCivil>Ross-Béthio</nomCentreEtatCivil>
+  </enTeteAdministratif>
+
+  <informationsRegistre>
+    <anneeRegistreLettres>Mille neuf cent soixante sept</anneeRegistreLettres>
+    <anneeRegistreChiffres>1967</anneeRegistreChiffres>
+    <numeroRegistreLettres>Cent quatre vingt quatorze</numeroRegistreLettres>
+    <numeroRegistreChiffres>194</numeroRegistreChiffres>
+  </informationsRegistre>
+
+  <acteNaissance>
+    <dateNaissanceLettres>quatorze octobre mille neuf cent soixante sept</dateNaissanceLettres>
+    <dateNaissance>1967-10-14</dateNaissance>
+    <lieuNaissance>Ross-Béthio</lieuNaissance>
+    <sexe>F</sexe>
+    <prenomEnfant>Marya</prenomEnfant>
+    <nomFamilleEnfant>Ndoye</nomFamilleEnfant>
+    <prenomPere>Babacar</prenomPere>
+    <prenomMere>Salimata</prenomMere>
+    <nomFamilleMere>Diop</nomFamilleMere>
+  </acteNaissance>
+
+  <!-- Pas de jugementSupplement : acte ordinaire, bloc laissé vide sur le document source -->
+
+  <delivrance>
+    <centreDelivrance>Principal de Ndiaye</centreDelivrance>
+    <lieuDelivrance>Ndiaye</lieuDelivrance>
+    <dateDelivrance>2013-12-17</dateDelivrance>
+    <officierEtatCivil>Gorgui Mbodji</officierEtatCivil>
+  </delivrance>
+
+</extraitNaissance>

@@ -1,0 +1,19 @@
+Loading weights:   0%|          | 0/199 [00:00<?, ?it/s]Loading weights: 100%|##########| 199/199 [00:00<00:00, 2018.29it/s]
+PDF sauvegarde : 19173 bytes
+OK  BROUILLON OFFICIEL
+OK  Marya
+OK  Ndoye
+OK  Ross-Béthio
+OK  Salimata
+OK  Diop
+OK  Gorgui Mbodji
+
+(process:10320): GLib-GIO-WARNING **: 09:46:05.952: Unexpectedly, UWP app `Microsoft.OutlookForWindows_1.2025.716.500_x64__8wekyb3d8bbwe' (AUMId `Microsoft.OutlookForWindows_8wekyb3d8bbwe!Microsoft.OutlookforWindows') supports 4 extensions but has no verbs
+
+(process:10320): GLib-GIO-WARNING **: 09:46:06.547: Unexpectedly, UWP app `Microsoft.ScreenSketch_11.2602.49.0_x64__8wekyb3d8bbwe' (AUMId `Microsoft.ScreenSketch_8wekyb3d8bbwe!App') supports 29 extensions but has no verbs
+
+(process:10320): GLib-GIO-WARNING **: 09:46:06.585: Unexpectedly, UWP app `Clipchamp.Clipchamp_4.5.10920.0_x64__yxz26nhyzhsrt' (AUMId `Clipchamp.Clipchamp_yxz26nhyzhsrt!App') supports 41 extensions but has no verbs
+
+(process:10320): GLib-GIO-WARNING **: 09:46:06.734: Unexpectedly, UWP app `PythonSoftwareFoundation.PythonManager_26.3.240.0_x64__3847v3x7pw1km' (AUMId `PythonSoftwareFoundation.PythonManager_3847v3x7pw1km!Python.Exe') supports 4 extensions but has no verbs
+
+(process:10320): GLib-GIO-WARNING **: 09:46:06.735: Unexpectedly, UWP app `PythonSoftwareFoundation.PythonManager_26.3.240.0_x64__3847v3x7pw1km' (AUMId `PythonSoftwareFoundation.PythonManager_3847v3x7pw1km!Pythonw.Exe') supports 2 extensions but has no verbs

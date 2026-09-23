@@ -1,0 +1,29 @@
+C:\Users\USER\Desktop\MEMOIR2\backend-agent\venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+Loading weights:   0%|          | 0/199 [00:00<?, ?it/s]Loading weights: 100%|##########| 199/199 [00:00<00:00, 3044.34it/s]
+
+(process:8592): GLib-GIO-WARNING **: 09:56:35.374: Unexpectedly, UWP app `Microsoft.OutlookForWindows_1.2025.716.500_x64__8wekyb3d8bbwe' (AUMId `Microsoft.OutlookForWindows_8wekyb3d8bbwe!Microsoft.OutlookforWindows') supports 4 extensions but has no verbs
+
+(process:8592): GLib-GIO-WARNING **: 09:56:36.223: Unexpectedly, UWP app `Microsoft.ScreenSketch_11.2602.49.0_x64__8wekyb3d8bbwe' (AUMId `Microsoft.ScreenSketch_8wekyb3d8bbwe!App') supports 29 extensions but has no verbs
+
+(process:8592): GLib-GIO-WARNING **: 09:56:36.294: Unexpectedly, UWP app `Clipchamp.Clipchamp_4.5.10920.0_x64__yxz26nhyzhsrt' (AUMId `Clipchamp.Clipchamp_yxz26nhyzhsrt!App') supports 41 extensions but has no verbs
+
+(process:8592): GLib-GIO-WARNING **: 09:56:36.557: Unexpectedly, UWP app `PythonSoftwareFoundation.PythonManager_26.3.240.0_x64__3847v3x7pw1km' (AUMId `PythonSoftwareFoundation.PythonManager_3847v3x7pw1km!Python.Exe') supports 4 extensions but has no verbs
+
+(process:8592): GLib-GIO-WARNING **: 09:56:36.558: Unexpectedly, UWP app `PythonSoftwareFoundation.PythonManager_26.3.240.0_x64__3847v3x7pw1km' (AUMId `PythonSoftwareFoundation.PythonManager_3847v3x7pw1km!Pythonw.Exe') supports 2 extensions but has no verbs
+📁 Dossier de test : eea1027f-3ae9-46ce-9569-d962da32b8b0
+
+=== 1. Génération (dossier complet) ===
+{'document_genere_id': '720fc9c0-58cb-4275-9b16-a90c9a701ae9', 'version': 1, 'statut': 'genere', 'url_signee': 'https://ntmqnhyzpevbfosopmjy.supabase.co/storage/v1/object/sign/documents-generes/eea1027f-3ae9-46ce-9569-d962da32b8b0/v1.pdf?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV8xZjA3NjgwMS0zZDJlLTQ5MzQtYmQzZS1kNTRjMDRjYTllNjIiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJkb2N1bWVudHMtZ2VuZXJlcy9lZWExMDI3Zi0zYWU5LTQ2Y2UtOTU2OS1kOTYyZGEzMmI4YjAvdjEucGRmIiwic2NvcGUiOiJkb3dubG9hZCIsImlhdCI6MTc4NzEzMzQxMiwiZXhwIjoxNzg3MTM3MDEyfQ.iO_H2mmhqBXPiXL_NsatBdFQvksNk_bm0tQJ-UddSKA'}
+✅ PDF réellement présent dans Storage (19172 octets).
+✅ dossiers.statut passé à 'genere'.
+
+=== 2. Régénération ===
+{'document_genere_id': '9810761c-10ef-47d4-9897-6abb6fd0dab4', 'version': 2, 'statut': 'genere', 'url_signee': 'https://ntmqnhyzpevbfosopmjy.supabase.co/storage/v1/object/sign/documents-generes/eea1027f-3ae9-46ce-9569-d962da32b8b0/v2.pdf?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV8xZjA3NjgwMS0zZDJlLTQ5MzQtYmQzZS1kNTRjMDRjYTllNjIiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJkb2N1bWVudHMtZ2VuZXJlcy9lZWExMDI3Zi0zYWU5LTQ2Y2UtOTU2OS1kOTYyZGEzMmI4YjAvdjIucGRmIiwic2NvcGUiOiJkb3dubG9hZCIsImlhdCI6MTc4NzEzMzQ1MSwiZXhwIjoxNzg3MTM3MDUxfQ.X6eZoQlgZeKJrdaOEi_jHLCFgxh538MrUL3IO3MZ0B0'}
+✅ version=2 créée, v1 toujours présente (historique conservé, pas d'écrasement).
+
+=== 3. Dossier volontairement incomplet ===
+status: 422 body: {'detail': {'message': 'Champs obligatoires manquants : numeroActe (source=formulaire.numeroActe)', 'champs_en_erreur': ['numeroActe (source=formulaire.numeroActe)']}}
+✅ 422 avec le champ en erreur listé, aucun documents_generes créé, statut du dossier inchangé.
+
+✅ Tâche D.3 : endpoint de génération OK
