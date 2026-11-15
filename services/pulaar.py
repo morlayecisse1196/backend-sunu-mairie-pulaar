@@ -204,6 +204,74 @@ def bloc_glossaire() -> str:
     )
 
 
+def bloc_comprehension() -> str:
+    """
+    Le glossaire dans l'AUTRE SENS : pour COMPRENDRE le citoyen.
+
+    POURQUOI IL A FALLU L'ÉCRIRE
+
+    `bloc_glossaire()` n'est injecté que dans le prompt du traducteur, qui va
+    du français vers le pulaar. L'agent savait donc DIRE « deftere wulngo »
+    sans savoir le COMPRENDRE. Joué en pulaar de bout en bout, le dialogue
+    répondait ceci au deuxième tour :
+
+        citoyen : « Deftere wulngo »
+        agent   : « Je ne comprends pas ce que tu veux dire par "Deftere
+                    wulngo". Peux-tu me dire quelle démarche tu souhaites
+                    faire ? »
+
+    — à propos du terme qui figure dans son propre glossaire validé. Douze
+    tours en pulaar, zéro champ rempli : un locuteur pulaar ne pouvait même
+    pas commencer une démarche.
+
+    Les nombres, le oui/non et les unités de durée viennent de
+    `services/pulaar_nombres.py`, c'est-à-dire de ce que l'agent PRONONCE
+    lui-même. Il doit au minimum reconnaître ce qu'il dit.
+    """
+    # Plusieurs termes français partagent un même mot pulaar (« acte de
+    # naissance » et « extrait de naissance » se disent tous deux « deftere
+    # wulngo »). On les regroupe plutôt que de donner au modèle deux lignes
+    # qui se contredisent.
+    par_pulaar: dict[str, list[str]] = {}
+    for terme in TERMES:
+        if terme.pulaar.lower() == terme.francais.lower():
+            continue  # mot gardé en français : rien à expliquer
+        par_pulaar.setdefault(terme.pulaar, []).append(terme.francais)
+
+    lignes = [f"- « {mot} » = {' / '.join(sens)}" for mot, sens in sorted(par_pulaar.items())]
+
+    from services import pulaar_nombres as nombres  # local : évite un cycle d'import
+
+    chiffres = ", ".join(f"« {mot} » = {valeur}"
+                         for valeur, mot in sorted(nombres.UNITES.items()) if valeur > 0)
+    # Même regroupement que pour les termes : « duuɓi » traduit « ans »,
+    # « année » et « années ». Trois lignes séparées diraient au modèle trois
+    # choses pour un seul mot.
+    durees_par_mot: dict[str, set[str]] = {}
+    for francais, mot in nombres.UNITES_AGE.items():
+        durees_par_mot.setdefault(mot, set()).add(francais)
+    durees = ", ".join(f"« {mot} » = {' / '.join(sorted(sens))}"
+                       for mot, sens in sorted(durees_par_mot.items()))
+
+    return "\n".join([
+        "LE CITOYEN PEUT PARLER PULAAR. Sa parole arrive par une transcription "
+        "automatique, donc parfois approximative. Voici de quoi la comprendre : ne "
+        "réponds JAMAIS que tu ne comprends pas un mot qui figure ci-dessous.",
+        "",
+        "Mots pulaar et leur sens :",
+        *lignes,
+        "",
+        f"Oui / non : « {nombres.OUI} » = oui, « {nombres.NON} » = non.",
+        f"Chiffres : {chiffres} ; « {nombres.DIX} » = 10, « {nombres.VINGT} » = 20, "
+        f"« {nombres.DIZAINES} » = les dizaines, « {nombres.CENT} » = 100, "
+        f"« {nombres.MILLE} » = 1000 ; « {nombres.ET} » relie les nombres.",
+        f"Durées : {durees}.",
+        "Sexe : « gorko » = masculin (garçon, homme), « debbo » = féminin (fille, femme).",
+        "Dates : « ñalnde » = le jour, « lewru » = le mois, « hitaande » = l'année.",
+        "Un nom de personne ou de lieu se dit tel quel dans les deux langues.",
+    ])
+
+
 # Construit une seule fois : les mots les plus longs d'abord, sinon « acte »
 # remplacerait le début de « acte de naissance » et laisserait « de naissance »
 # derrière lui.

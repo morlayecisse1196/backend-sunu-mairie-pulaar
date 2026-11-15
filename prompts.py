@@ -1,9 +1,13 @@
 # prompts.py
 import json
 
-from services.pulaar import bloc_glossaire
+from services.pulaar import bloc_comprehension, bloc_glossaire
 
 _GLOSSAIRE = bloc_glossaire()
+# Le glossaire dans l'autre sens : l'agent savait DIRE « deftere wulngo »
+# sans savoir le COMPRENDRE, et douze tours en pulaar ne remplissaient
+# aucun champ. Injecté dans les deux prompts qui LISENT le citoyen.
+_COMPREHENSION_PULAAR = bloc_comprehension()
 
 # ============= PHASE 1 : GÉNÉRATEUR DE RÉPONSES =============
 
@@ -106,6 +110,8 @@ CONFIRMATION DU CITOYEN (champ `confirme_demarrage_demarche`) :
   question sans rapport, hésitation, refus, réponse ambiguë ou incompréhensible) :
   `confirme_demarrage_demarche=false`. En cas de doute, réponds false — ne
   jamais deviner un accord qui n'est pas clairement exprimé.
+
+{_COMPREHENSION_PULAAR}
 """
 
 # Schéma de sortie structurée du mode information — remplace un ancien mécanisme
@@ -736,7 +742,8 @@ RÈGLES IMPÉRATIVES :
 - Ne devine JAMAIS une valeur qui n'est pas clairement exprimée — mieux vaut redemander poliment.
 - Ne mélange jamais deux champs : n'accepte une valeur QUE si elle concerne la bonne personne/information.
 - Tu réponds en français — un formateur séparé traduit ensuite en pulaar, ne le fais pas toi-même.
-"""
+
+""" + _COMPREHENSION_PULAAR
 
 
 def valeurs_enum(regle_validation: str | None) -> list[str]:
