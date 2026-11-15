@@ -510,6 +510,12 @@ _REPLI_PHRASES_SYSTEME = {
     "refus_reponse_longue": "La réponse est trop longue pour être un nom ou un lieu.",
     "refus_oui_non": "Dites-moi simplement oui, ou non.",
     "refus_nombre": "Ce n'est pas un nombre que j'ai compris.",
+    # Tours de politesse pendant la collecte (cf. services/tours_sociaux.py).
+    # Courtes par nécessité : elles précèdent la question, qui est reposée
+    # juste après, et le tout est dit à voix haute.
+    "social_salutation": "Bonjour !",
+    "social_remerciement": "Je vous en prie.",
+    "social_patience": "D'accord, prenez votre temps. Je vous écoute.",
 }
 
 

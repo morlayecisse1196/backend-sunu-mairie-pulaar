@@ -38,7 +38,7 @@ from typing import Any, Callable
 import httpx
 
 from dossiers_repo import list_documents, create_cas_particulier
-from services import conditions, demarche, phrases, regles_demarche
+from services import conditions, demarche, phrases, regles_demarche, tours_sociaux
 from prompts import (
     SYSTEM_PROMPT_CHAMP_CIBLE, build_schema_champ_cible, build_prompt_champ_cible,
     SYSTEM_PROMPT_DOCUMENT_INDISPONIBLE, SCHEMA_DOCUMENT_INDISPONIBLE, build_prompt_document_indisponible,
@@ -610,6 +610,41 @@ def _reponse_pour_etape(etape: dict | None, confirmation: phrases.Phrase | None 
     )
 
 
+#: Ce que l'agent dit selon la nature du tour. La question du champ est
+#: reposée ensuite, sauf pour une demande de pause : à quoi bon répéter la
+#: question à quelqu'un qui vient de demander un instant.
+_REPONSE_SOCIALE = {
+    tours_sociaux.SALUTATION: ("social_salutation", True),
+    tours_sociaux.REMERCIEMENT: ("social_remerciement", True),
+    tours_sociaux.PATIENCE: ("social_patience", False),
+    # Une demande de répétition n'appelle aucune phrase d'introduction : la
+    # question reposée EST la réponse. Y ajouter « je n'ai pas compris »
+    # inverserait les rôles — c'est le citoyen qui n'a pas entendu.
+    tours_sociaux.REPETITION: (None, True),
+}
+
+
+def _repondre_tour_social(etat: dict, champ: dict, nature: str) -> dict:
+    """
+    Répond à un tour de politesse sans le compter comme un échec.
+
+    Ni `compteurs` ni `raisons` ne sont touchés : le champ reste visé, et le
+    citoyen dispose toujours de ses trois essais pour y répondre.
+    """
+    cle_phrase, reposer_question = _REPONSE_SOCIALE[nature]
+    morceaux = []
+    if cle_phrase is not None:
+        morceaux.append(demarche.phrase_systeme(cle_phrase))
+    if reposer_question:
+        morceaux.append(demarche.question_champ(champ))
+    return _resultat(
+        phrases.reponse(*morceaux),
+        document_attendu=None,
+        phase_suivante="collecte",
+        cas_particulier_cree=False,
+    )
+
+
 def _abandonner_champ(
     etat: dict,
     champ: dict,
@@ -831,6 +866,23 @@ async def _tour_administratif(etat: dict, message: str, headers: dict, contexte:
     # -----------------------------------------------------------------
     champ = etape["definition"]
     nom_champ = champ["nom_champ"]
+
+    # --- D'abord : est-ce seulement de la politesse ? ------------------
+    #
+    # « Bonjour », « merci », « attends », « répète » ne répondent pas au
+    # champ, et le modèle les jugeait donc invalides : l'agent répondait « Je
+    # n'ai pas compris » à quelqu'un qui venait de le saluer. Pire, chaque
+    # message de ce genre comptait comme un échec, et trois d'affilée
+    # abandonnaient le champ — dire bonjour, merci et attends suffisait à
+    # saboter sa propre demande.
+    #
+    # Ces tours-là ne sont pas des erreurs : ils reçoivent leur propre
+    # réponse, la question est reposée telle quelle, et AUCUN compteur ne
+    # bouge. Le tri est déterministe et n'avale jamais un message qui porte
+    # aussi une réponse (cf. services/tours_sociaux.py).
+    nature_sociale = tours_sociaux.classer(message)
+    if nature_sociale is not None:
+        return _repondre_tour_social(etat, champ, nature_sociale)
 
     prompt = build_prompt_champ_cible(champ, message, raisons.get(nom_champ))
     schema = build_schema_champ_cible(champ["type_valeur"], champ.get("regle_validation"))
