@@ -118,6 +118,37 @@ Deux points qui ont déjà causé des pannes silencieuses :
 
 ---
 
+## 4 bis. Le cache audio ne se déploie pas
+
+`audio_cache/` est dans `.gitignore` : un `git clone` ou un `git pull`
+n'apporte **aucun** fichier audio. Sur une machine neuve, chaque phrase est
+donc resynthétisée au premier appel — mesuré à 7,6 s, à la charge du premier
+citoyen qui tombe dessus.
+
+Ces fichiers sont **portables** : la clé est l'empreinte du texte réellement
+envoyé au synthétiseur, pas un identifiant de base. Le cache d'une machine
+vaut donc sur une autre, tant que les phrases relues sont les mêmes.
+
+```bash
+# depuis backend-agent/, en local
+tar czf - audio_cache | ssh root@sunu-mairie.duckdns.org   'cd /opt/sunu/backend && tar xzf - && chown -R sunu:sunu audio_cache'
+```
+
+Puis vérifier, démarche par démarche :
+
+```bash
+runuser -u sunu -- venv/bin/python scripts/pregenerer_audio.py   --demarche extrait_naissance --verifier
+```
+
+> ⚠️ **Le dossier doit appartenir à `sunu`.** Créé par root — ce qui arrive dès
+> qu'une commande est lancée en root dans le dossier du projet — le service ne
+> peut plus y écrire. L'échec est **silencieux** (try/except autour de
+> l'écriture) : l'application continue de répondre, mais resynthétise chaque
+> phrase à chaque appel, indéfiniment. Symptôme : un `/audio/ui/...` qui met
+> plusieurs secondes **à chaque fois** au lieu de quelques millisecondes.
+
+---
+
 ## 5. Accès SSH
 
 Deux clés distinctes, révocables séparément :
