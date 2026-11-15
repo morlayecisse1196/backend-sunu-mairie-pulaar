@@ -21,6 +21,17 @@ debug_audio_recu/
 # jamais commitée (nom, numéro de carte, NIN, adresse d'une vraie personne) ---
 model_OCR/image_cni-exmple/
 
+# Le JEU D'ENTRAÎNEMENT et les photos d'essai : 380 cartes d'identité de
+# personnes réelles (Roboflow « senegal cards », et les clichés WhatsApp de
+# TESTE/). La règle ci-dessus ne couvrait qu'un seul dossier, et ces deux-là
+# seraient partis au premier `git add -A` — dans un dépôt public.
+#
+# Ce qui est VERSIONNÉ, et suffit à faire tourner l'application, c'est le
+# modèle entraîné : model_OCR/cni_extraction_package/model/cni_yolov8s.pt.
+# Les images qui ont servi à l'obtenir n'ont pas à être redistribuées.
+model_OCR/senegal cards.v1i.yolov8/
+model_OCR/TESTE/
+
 # --- IDE / OS ---
 .vscode/
 .idea/
