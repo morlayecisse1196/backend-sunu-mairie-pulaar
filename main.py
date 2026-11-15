@@ -16,13 +16,14 @@ from contextlib import asynccontextmanager, suppress
 # testant localement la bascule administratif (Sprint B, Tâche B.3).
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
-from config import OPENROUTER_API_KEY, OPENROUTER_BASE_URL, FRONTEND_URL
+from config import OPENROUTER_API_KEY, OPENROUTER_BASE_URL, ORIGINES_CORS
 # RAG sémantique (pgvector) avec filtrage par commune, avec repli automatique
 # sur la recherche mot-clé (Supabase REST) si la connexion directe à la base échoue.
 from search2 import search_demarches as _search_demarches_semantic, format_demarche_pour_prompt
 from search import search_demarches as _search_demarches_keyword
 from auth import (verify_token, get_user_profile, get_current_consultant, get_current_admin,
                   get_current_profile, prechauffer_jwks)
+from services.prechauffage import prechauffer_services_vocaux
 from services.regles_statut import RefusStatut, verifier_action_consultant
 from routers import moi as routeur_moi
 from routers import temps_reel as routeur_temps_reel
@@ -34,8 +35,14 @@ from routers import consultant as routeur_consultant
 from routers import admin as routeur_admin
 from routers import atelier as routeur_atelier
 from routers import demarches as routeur_demarches
-from services import audit, corrections, evenements, llm, partie_confidentielle, profil, qualite_photo
+from services import audit, corrections, evenements, llm, partie_confidentielle, profil, qualite_photo, tampon_image
 from services import demarche as demarche_config  # `demarche` est déjà un nom de variable courant ici
+from services.journal import obtenir_logger
+
+# Journal de ce module. `print` était le seul moyen de signaler quelque chose
+# ici : illisible une fois le serveur lancé sous systemd, et sans niveau pour
+# distinguer une panne d'une simple information.
+log = obtenir_logger("api")
 from temps_reel.registre import registre as registre_connexions
 from temps_reel.sessions import magasin as magasin_sessions
 from admin_repo import (
@@ -45,7 +52,7 @@ from admin_repo import (
     get_supervision,
     upload_tampon, get_tampon_signed_url, confirmer_tampon, list_tampon_confirmations,
 )
-from demarches_repo import list_communes, list_demarches, get_demarche_by_id
+from demarches_repo import list_demarches, get_demarche_by_id
 from dossiers_repo import (
     create_dossier, update_dossier, resoudre_commune_id, generer_numero_suivi,
     get_dossier, upload_document, list_dossiers_par_commune, list_documents,
@@ -56,7 +63,7 @@ from dossiers_repo import (
     get_document_genere_signed_url, create_document_genere,
     list_documents_generes, update_document_genere_statut,
     list_dossiers_par_citoyen, create_remarque,
-    get_or_create_formulaire_acte, get_commune,
+    get_or_create_formulaire_acte, get_commune, list_noms_communes,
     create_cas_particulier, list_cas_particuliers, get_cas_particulier, resoudre_cas_particulier
 )
 from document_generator import (
@@ -104,10 +111,16 @@ async def cycle_de_vie(_app: FastAPI):
     # Clés de signature chargées d'avance : sinon la première requête attend,
     # et sur connexion lente elle échoue puis repart vers Supabase Auth.
     tache_jwks = asyncio.create_task(prechauffer_jwks())
+    # ASR et TTS réveillés d'avance : les Spaces HF s'endorment, et un TTS
+    # endormi a été mesuré à 55 s. Cette attente tombait sur le premier citoyen
+    # de la journée ; elle tombe maintenant sur le démarrage du serveur, où
+    # personne n'attend. Tâche de fond : un Space injoignable ne retarde ni
+    # n'empêche le démarrage.
+    tache_vocal = asyncio.create_task(prechauffer_services_vocaux())
     try:
         yield
     finally:
-        for tache in (tache_purge, tache_jwks):
+        for tache in (tache_purge, tache_jwks, tache_vocal):
             tache.cancel()
             with suppress(asyncio.CancelledError):
                 await tache
@@ -119,16 +132,18 @@ app = FastAPI(
     lifespan=cycle_de_vie,
 )
 
-# CORS (Sprint C, Tâche C.1) : le web consultant/admin (React/Next.js, origine
-# distincte) doit pouvoir appeler cette API depuis le navigateur. Le mobile
-# Flutter et les scripts de test (httpx/websockets) ne passent pas par un
-# navigateur donc ne sont pas concernés par CORS — seule l'origine web est à
-# lister. allow_credentials=True car les futurs endpoints web envoient le JWT
-# via un header Authorization (pas un cookie), mais FastAPI/starlette exige ce
-# flag dès qu'on veut un jour envoyer des credentials cross-origin.
+# CORS (Sprint C, Tâche C.1) : les fronts web (React/Next.js, origines
+# distinctes de l'API) doivent pouvoir appeler cette API depuis le navigateur.
+# Le mobile Flutter et les scripts de test (httpx/websockets) ne passent pas
+# par un navigateur, donc ne sont pas concernés — seules les origines web sont
+# à lister. Il y en a maintenant plusieurs (espace consultant/admin, espace
+# citoyen) : la liste vient de `config.ORIGINES_CORS`, qui lit `FRONTEND_URLS`
+# (valeurs séparées par des virgules). allow_credentials=True car les endpoints
+# web envoient le JWT via un en-tête Authorization — ce qui interdit `*` comme
+# origine, les navigateurs refusant la combinaison.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[FRONTEND_URL],
+    allow_origins=ORIGINES_CORS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -422,8 +437,16 @@ async def search(request: SearchRequest, user: dict = Depends(get_current_user))
 
 @app.get("/communes")
 async def get_communes():
-    """Public (pas d'auth) : peuple le sélecteur de commune à l'inscription mobile."""
-    return {"communes": list_communes()}
+    """
+    Public (pas d'auth) : peuple le sélecteur de commune à l'inscription, sur
+    mobile comme sur le web.
+
+    Lit la table `communes` (cf. dossiers_repo.list_noms_communes), et non les
+    valeurs distinctes de `demarches.commune` comme avant : celles-ci
+    contenaient « National » — une sentinelle, pas une commune — et
+    omettaient les communes du pilote.
+    """
+    return {"communes": list_noms_communes()}
 
 @app.get("/demarches")
 async def get_demarches(user: dict = Depends(get_current_user)):
@@ -922,7 +945,7 @@ async def get_document_genere_audio(dossier_id: str, user: dict = Depends(get_cu
 
     jugement_requis = dossier.get("cas_legal") == "jugement_requis"
     valeurs, _erreurs = resoudre_template(dossier, commune, champs_formulaire, jugement_requis)
-    phrase_fr = construire_resume_document_genere(valeurs)
+    phrase_fr = construire_resume_document_genere(valeurs, dossier.get("type_demarche"))
     narration_prompt = build_narration_document_genere_prompt(phrase_fr)
 
     headers = {
@@ -1042,10 +1065,24 @@ def _exiger_action_autorisee(dossier: dict, action: str) -> None:
 @app.get("/consultant/dossiers/{dossier_id}/formulaires")
 async def consultant_liste_formulaires(dossier_id: str, consultant: dict = Depends(get_current_consultant)):
     """
-    Formulaires structurés du dossier (un par document uploadé), créés à la
-    volée s'ils n'existent pas encore — pré-remplis source="dialogue" depuis
-    dossiers.slots là où la correspondance est fiable (cf. Flux §2.2 V1,
-    dialogue_engine.construire_champs_formulaire).
+    Formulaires structurés du dossier, créés à la volée s'ils n'existent pas
+    encore — pré-remplis source="dialogue" depuis dossiers.slots là où la
+    correspondance est fiable (cf. Flux §2.2 V1,
+    dialogue_engine.construire_champs_formulaire) :
+
+      * un par PIÈCE uploadée (`document_id` renseigné) ;
+      * celui de l'ACTE à établir (`document_id` à NULL) — numéro et année du
+        registre, mentions en toutes lettres, officier signataire.
+
+    Ce second formulaire manquait à cette liste (trouvé en jouant le parcours
+    citoyen <-> consultant en novembre 2026). Il porte EXACTEMENT les champs
+    que la génération exige et que le dialogue ne peut pas connaître, puisque
+    le consultant les lit sur le registre papier. Comme il n'était renvoyé par
+    aucun endroit, aucun écran ne permettait de les saisir : la génération
+    échouait en 422 sur `numeroActe` et `officierEtatCivil`, sur tous les
+    dossiers, sans recours. Un dossier sans aucune pièce photographiée — le
+    cas ordinaire d'une naissance déclarée dans les délais — ne recevait même
+    aucun formulaire du tout.
     """
     dossier = _verifier_dossier_commune_consultant(dossier_id, consultant)
     documents = list_documents(dossier_id)
@@ -1054,6 +1091,14 @@ async def consultant_liste_formulaires(dossier_id: str, consultant: dict = Depen
         formulaire = get_or_create_document_formulaire(dossier_id, document, dossier["slots"])
         if formulaire:
             formulaires.append(formulaire)
+
+    # En dernier, comme dans le déroulé du travail : on vérifie les pièces,
+    # puis on recopie le registre. `None` pour une démarche sans champ à
+    # saisir à la main (cf. dossiers_repo.type_document_acte).
+    formulaire_acte = get_or_create_formulaire_acte(dossier_id)
+    if formulaire_acte and not any(f["id"] == formulaire_acte["id"] for f in formulaires):
+        formulaires.append(formulaire_acte)
+
     return {"formulaires": formulaires}
 
 
@@ -1148,8 +1193,9 @@ async def consultant_generer_document(dossier_id: str, consultant: dict = Depend
     dossier = _verifier_dossier_commune_consultant(dossier_id, consultant)
     _exiger_action_autorisee(dossier, "generer")
 
+    rapport_generation: dict = {}
     try:
-        pdf_bytes = generer_document(dossier_id)
+        pdf_bytes = generer_document(dossier_id, rapport=rapport_generation)
     except DemarcheSansModele as e:
         # 422 et non 404 : le dossier existe, c'est le modèle qui manque.
         raise HTTPException(status_code=422, detail={"message": str(e), "champs_en_erreur": []})
@@ -1163,7 +1209,11 @@ async def consultant_generer_document(dossier_id: str, consultant: dict = Depend
     if not chemin:
         raise HTTPException(status_code=502, detail="Échec du stockage du PDF généré")
 
-    document_genere = create_document_genere(dossier_id, "extrait_naissance_v1", version, chemin)
+    # Le gabarit réellement employé, et non une constante : la génération vient
+    # de réussir, donc `generer_document` a renseigné le rapport.
+    document_genere = create_document_genere(
+        dossier_id, rapport_generation["template"], version, chemin
+    )
     if not document_genere:
         raise HTTPException(status_code=502, detail="Échec de l'enregistrement du document généré")
 
@@ -1179,11 +1229,32 @@ async def consultant_generer_document(dossier_id: str, consultant: dict = Depend
         cible_libelle=dossier.get("numero_suivi"), details={"version": version},
     )
 
+    # Un acte sans sceau sortait jusqu'ici en silence : le consultant ne
+    # pouvait s'en apercevoir qu'en ouvrant le PDF. On le dit, en distinguant
+    # la commune qui n'a pas de tampon de celle dont le tampon n'a pas pu être
+    # récupéré — la seconde est une panne, pas une configuration manquante.
+    if not rapport_generation.get("tampon_appose", True):
+        if rapport_generation.get("tampon_enregistre"):
+            log.error(
+                "Tampon enregistré mais non apposé (commune=%s, dossier=%s) — stockage injoignable ?",
+                rapport_generation.get("commune"), dossier_id,
+            )
+        else:
+            log.warning(
+                "Document généré sans tampon : aucun tampon enregistré pour la commune %s",
+                rapport_generation.get("commune"),
+            )
+
     return {
         "document_genere_id": document_genere["id"],
         "version": version,
         "statut": document_genere["statut"],
         "url_signee": get_document_genere_signed_url(chemin),
+        "tampon": {
+            "appose": rapport_generation.get("tampon_appose"),
+            "enregistre": rapport_generation.get("tampon_enregistre"),
+            "commune": rapport_generation.get("commune"),
+        },
     }
 
 
@@ -1403,17 +1474,35 @@ async def consultant_resoudre_cas_particulier(
 
 # --- Endpoints admin (Sprint C, Tâche C.4) ---
 
+# Les bornes sont celles de la contrainte `check` posée par la migration 015.
+# Les répéter ici n'est pas une redondance : sans elles, une latitude de 200
+# remonterait en 500 (violation de contrainte Postgres) au lieu d'un 422 qui
+# dit quel champ est faux. La base reste le garde-fou final.
+_LATITUDE = Field(default=None, ge=-90, le=90)
+_LONGITUDE = Field(default=None, ge=-180, le=180)
+
+
 class CommuneIn(BaseModel):
     nom: str
     region: Optional[str] = None
     departement: Optional[str] = None
     arrondissement: Optional[str] = None
+    # Coordonnées du centre de la commune : c'est ce qui permet à
+    # `GET /communes/proche` de proposer sa commune à un citoyen qui ne sait
+    # pas lire, au lieu de lui faire chercher un nom dans une liste. La
+    # migration 015 a créé les colonnes en août ; aucun chemin ne permettait
+    # de les renseigner, ni par l'API ni par l'écran d'administration — d'où
+    # zéro commune géolocalisée et un endpoint qui ne pouvait rien renvoyer.
+    latitude: Optional[float] = _LATITUDE
+    longitude: Optional[float] = _LONGITUDE
 
 
 class CommunePatch(BaseModel):
     region: Optional[str] = None
     departement: Optional[str] = None
     arrondissement: Optional[str] = None
+    latitude: Optional[float] = _LATITUDE
+    longitude: Optional[float] = _LONGITUDE
 
 
 @app.get("/admin/communes")
@@ -1427,7 +1516,10 @@ async def admin_liste_communes(admin: dict = Depends(get_current_admin)):
 
 @app.post("/admin/communes")
 async def admin_creer_commune(body: CommuneIn, admin: dict = Depends(get_current_admin)):
-    commune = create_commune(body.nom, body.region, body.departement, body.arrondissement)
+    commune = create_commune(
+        body.nom, body.region, body.departement, body.arrondissement,
+        latitude=body.latitude, longitude=body.longitude,
+    )
     if not commune:
         raise HTTPException(status_code=502, detail="Échec de la création de la commune (nom déjà pris ?)")
     await audit.journaliser(
@@ -1494,7 +1586,14 @@ async def admin_uploader_tampon(
         raise HTTPException(status_code=413, detail=f"Fichier trop volumineux (max {MAX_TAMPON_BYTES // (1024 * 1024)} Mo)")
 
     extension = EXTENSIONS_PAR_MIME_TAMPON[fichier.content_type]
-    chemin = upload_tampon(commune_id, contenu, extension, fichier.content_type)
+
+    # Le tampon est recopié en base64 dans CHAQUE acte délivré (data: URI, cf.
+    # document_generator.tampon_de_la_commune) : un scan brut de 700 Ko faisait
+    # un PDF de 639 Ko là où le même acte sans sceau en pèse 19. L'allègement
+    # ne peut pas faire échouer l'enregistrement — au pire, l'original est
+    # stocké tel quel.
+    allegement = tampon_image.alleger(contenu, extension)
+    chemin = upload_tampon(commune_id, allegement.octets, extension, fichier.content_type)
     if not chemin:
         raise HTTPException(status_code=502, detail="Échec du stockage du tampon")
 
@@ -1504,13 +1603,16 @@ async def admin_uploader_tampon(
 
     await audit.journaliser(
         "tampon_enregistre", acteur=admin, cible_type="commune", cible_id=commune_id,
-        cible_libelle=commune.get("nom"),
+        cible_libelle=commune.get("nom"), details=allegement.resume(),
     )
     return {
         "commune_id": commune_id,
         "fichier_url": chemin,
         "url_signee": get_tampon_signed_url(chemin),
         "confirmation": confirmation_row,
+        # Ce qui a été fait à l'image : l'administrateur doit pouvoir constater
+        # que le fichier stocké n'est pas exactement celui qu'il a déposé.
+        "allegement": allegement.resume(),
     }
 
 

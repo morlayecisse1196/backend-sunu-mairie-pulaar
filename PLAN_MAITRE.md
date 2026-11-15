@@ -27,7 +27,7 @@ il dit dans quel ordre les traiter, et pourquoi.
 | Ce qu'il me faut | Bloque | État |
 |---|---|---|
 | Traductions pulaar validées (par vous) | Étapes 1 et 3 | ⏳ |
-| Un acte de décès délivré par une mairie (le certificat médical reçu n'est PAS l'acte) | Étape 5.5 | ⏳ |
+| ~~Un acte de décès délivré par une mairie~~ reçu le 2026-09-26 (exemple FRANÇAIS : mentions à confirmer) | Étape 5.5 | ✅ |
 | Confirmation des règles par un officier d'état civil | Mise en service de l'étape 5 | ⏳ |
 | Accord pour les gestes des bras de l'avatar | Étape 6 | ⏳ |
 | Accord pour embarquer Three.js (téléchargement) | Étape 6 | ⏳ |
@@ -44,6 +44,8 @@ il dit dans quel ordre les traiter, et pourquoi.
 | Migration 027 puis relecture des règles du mariage par un officier | Étape 5.2 | ⏳ |
 | Migration 028 puis relecture des règles du décès par un officier | Étape 5.3 | ⏳ |
 | Migration 029 (brouillons pulaar) puis relecture des ~200 phrases à l'atelier | Étapes 5.1 à 5.3 | ⏳ |
+| Migrations 030, 031 et 032, puis `venv\Scripts\python.exe seed_embeddings.py` | Étapes 5 et 5.6 | ⏳ |
+| Saisie des coûts et délais réels dans l'écran Informations | Étape 5.6 | ⏳ |
 | Réimport de `phrases.tsv` réparé (3 lignes décalées) | Urgent | ⏳ |
 | Relecture des noms de mois en pulaar | Fin de l'étape 3 | ⏳ |
 | Relecture des 53 phrases pulaar | Fin de l'étape 3 | 🔸 importées, à écouter dans `/admin/atelier` |
@@ -210,30 +212,102 @@ l'application sans redéploiement.
       contourne pas) ; quand la lecture est impossible, on refuse plutôt que d'enregistrer
       sans savoir ; aucun champ de cause n'existe dans la démarche ; rien de ce qui est lu
       ne sort de la fonction, ni vers l'API ni vers le journal.
-- [ ] 5.5 Documents générés : modèle par démarche, correspondance des champs
-      **En attente de vos modèles réels** (acte de décès, certificat de mariage constaté) :
-      sans eux, impossible d'écrire les XSD sans inventer des mentions légales.
-      Décidé : un XSD par démarche, comme pour la naissance (validation stricte).
-      Fait en attendant : la génération REFUSE une démarche sans modèle (elle
-      fabriquait un extrait de naissance à partir d'un dossier de mariage).
+- [x] 5.5 Documents générés : modèle par démarche, correspondance des champs
+      **Tampon numérique apposé** (2026-09-26) : le tampon que l'administrateur
+      enregistre pour une commune arrive enfin SUR le document généré. Il était
+      stocké et sa confirmation journalisée, mais la génération l'ignorait —
+      le consultant produisait un acte nu. L'image voyage DANS le PDF (data URI,
+      pas un lien qui expire). Une commune sans tampon délivre quand même, et un
+      stockage injoignable ne bloque pas le guichet.
+      **DÉCISION DU 2026-09-26 : un document tamponné n'est plus un brouillon.**
+      La confirmation de l'administrateur suffit — elle est journalisée
+      (`tampon_confirmations`, migration 006), donc on sait qui a autorisé ce
+      tampon et quand. Le bandeau « brouillon officiel » ne s'affiche que sur
+      les documents SANS tampon, remplacé sinon par « Document délivré par la
+      mairie ». Corollaire à ne jamais perdre de vue : poser un tampon par un
+      autre chemin que `confirmer_tampon` reviendrait à délivrer un acte
+      d'apparence officielle sans trace de qui l'a permis.
+      **Numéro d'acte corrigé le 2026-09-26** : le XSD exigeait EXACTEMENT
+      19 chiffres — une estimation faite au comptage des cases « ERVE » d'un
+      formulaire vierge. Un registre qui inscrit « 412 » voyait sa génération
+      refusée, sans recours. La règle accepte désormais 1 à 19 chiffres. Le
+      format exact reste à confirmer auprès du service d'état civil : si vos
+      registres numérotent avec un tiret, une année ou une lettre, la règle
+      est encore à revoir (elle n'accepte que des chiffres).
+      Parcours complet vérifié de bout en bout, PDF réellement produit :
+      `tests/unit/test_parcours_naissance_complet.py`.
+      Fait : le moteur choisit son modèle d'après la démarche du dossier, et la
+      structure de l'instance XML est LUE dans le template (plus de recopie en
+      Python). **Mariage fait** à partir de votre certificat réel (Fann - Point E,
+      registre n° 307) : `certificat_mariage.xsd`, `certificat_mariage_v1.xml`,
+      `certificat_mariage_v1.html`, phrase audio propre au mariage.
+      Fait aussi : le formulaire du consultant dépend de la démarche. Avant, tout
+      dossier recevait celui de l'extrait de naissance — un dossier de mariage
+      héritait du bloc « jugement supplétif » et n'avait aucune case pour ses
+      propres mentions de registre : sa génération échouait sur des champs que
+      personne ne pouvait remplir.
+      **Décès fait aussi**, d'après la copie intégrale reçue le 2026-09-26 :
+      `acte_deces.xsd`, `acte_deces_v1.xml`, `acte_deces_v1.html`, accords
+      décédé/décédée, phrase audio sobre. ⚠️ Cet exemple est un acte FRANÇAIS
+      (Ris-Orangis, Essonne) : toutes ses mentions sont des HYPOTHÈSES DE FORME
+      à confirmer par un officier d'état civil sénégalais avant mise en service.
+      Le certificat médical reçu la veille n'a servi à rien du document : sa
+      seconde partie porte les causes du décès, qui n'entrent jamais dans
+      l'application (règle santé, §1). Cinq tests le verrouillent — contrat de
+      données, template, PDF, phrase dite, champs relus.
+      Les trois démarches ont donc leur modèle ; le garde-fou « démarche sans
+      modèle » protège désormais celles qui seront publiées ensuite.
+      **Dates en toutes lettres automatiques** (`services/dates_en_lettres.py`,
+      décision du 2026-09-26) : cinq mentions par dossier ne sont plus recopiées
+      à la main, elles sont écrites depuis la date que le dialogue a collectée.
+      Conversion entièrement déterministe (aucun modèle de langue), vérifiée cas
+      par cas sur les pièges du français. La saisie du consultant passe TOUJOURS
+      avant : s'il recopie la mention du registre papier, c'est la sienne qui
+      sort. Une date illisible ne produit rien — un champ manquant bloque et se
+      voit, une date fausse se signe.
+      La génération REFUSE toujours une démarche sans modèle (le décès aujourd'hui).
+      À faire confirmer par un officier d'état civil : les deux témoins sont
+      collectés par le dialogue mais n'apparaissent pas sur le certificat réel —
+      ils sont portés au registre, pas sur le document remis.
       Restera à faire : lire la table `templates` (l'écran « Modèles » n'est
       branché sur rien), enregistrer le document sous le nom de sa démarche,
       formulaires consultant des nouvelles pièces, règles de l'assistant par démarche.
-- [ ] 5.6 Contenu du mode information pour les trois, avec coûts et délais réels
+- [x] 5.6 Contenu du mode information — migration 031 + écran « Informations ».
+      Le coût, le délai, le lieu, les conditions et les alertes dormaient en base :
+      seuls le nom et trois documents arrivaient au modèle. Ils lui sont maintenant
+      transmis, et une information absente est annoncée comme absente (l'agent renvoie
+      à la mairie au lieu d'avancer un chiffre). Le prompt ne dit plus que seul
+      l'extrait de naissance est menable : c'est la fiche qui décide.
+      **Les coûts et délais réels restent à saisir par la mairie** (écran Informations) :
+      je n'invente aucun montant.
 
 **Vérification :** trois dossiers complets, du dialogue au document, relus par un officier
 d'état civil.
+
+### Correctifs de la bascule (avant 5.6)
+
+- [x] La bascule exige un « oui » DÉTERMINISTE (`temps_reel/intentions.py`) en plus du
+      jugement du modèle : le détecteur existait, écrit pour « RG7 et bascule », mais
+      seule la relecture s'en servait. Un « oui » ambigu ouvrait un dossier réel.
+- [x] Aucune démarche reconnue ⇒ on NE bascule PAS. Avant, repli muet sur l'extrait de
+      naissance : un citoyen venu déclarer un décès s'entendait demander l'âge de son enfant.
+      L'agent liste maintenant les démarches qu'il sait mener.
+- [x] L'agent NOMME la démarche avant de la commencer (migration 030, phrases fixes à trous) :
+      phrase relisable dans l'atelier, pré-générable en audio, et seul moment où le citoyen
+      peut dire non. Un pulaar relu qui a perdu le trou n'est pas dit.
+- [ ] Reste ouvert : aucun moyen de sortir du mode administratif une fois engagé (seule la
+      fin du dossier y ramène), et rien n'est mesuré face à un vrai modèle et une vraie voix.
 
 ## Étape 6 — Avatar vivant
 
 Indépendant des étapes 2 à 5 : peut passer avant si vous préférez du visible plus tôt.
 
-- [ ] 6.1 Nettoyage du moteur actuel (A1)
-- [ ] 6.2 Moteur en couches : activité, émotion, réactions, regard (A2, A3)
-- [ ] 6.3 Directeur côté Flutter et ses tests (A4)
-- [ ] 6.4 Mode écriture et écoute naturelle (A5, A6)
-- [ ] 6.5 Bouche synchronisée sur le son réel (A7)
-- [ ] 6.6 Performance sur téléphone modeste (A8)
+- [x] 6.1 Nettoyage du moteur actuel (A1)
+- [x] 6.2 Moteur en couches : activité, émotion, réactions, regard (A2, A3) — gestes des bras (A2.8) en attente de votre accord
+- [x] 6.3 Directeur côté Flutter et ses tests (A4)
+- [x] 6.4 Mode écriture et écoute naturelle (A5, A6)
+- [x] 6.5 Bouche synchronisée sur le son réel (A7)
+- [x] 6.6 Performance sur téléphone modeste (A8) — 30 images/s, rendu en pause hors écran, écran d'attente et repli en cas d'échec, Three.js embarqué (plus besoin d'internet). Restent A8.4 (mesure mémoire du plein écran, sur votre téléphone) et A8.6 (poids de l'APK, chantier à part)
 
 ## Étape 7 — Accessibilité et confort restants
 

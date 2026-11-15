@@ -14,6 +14,11 @@ n'a pas de compte.
         séparées par des tabulations (identifiant, français, pulaar, contexte).
         Ouvrez-le dans un tableur, remplissez la troisième colonne.
 
+    python scripts/atelier_pulaar.py --modele a_relire.tsv --a-relire
+        Même chose, mais seulement les phrases PAS ENCORE relues. À préférer
+        pour une séance de relecture : rapporter le fichier complet avec
+        --valider marquerait relues des phrases que personne n'a revues.
+
     python scripts/atelier_pulaar.py --importer phrases.tsv
         Relit le fichier et enregistre les traductions remplies. Une ligne
         laissée vide n'écrase rien. RIEN n'est marqué comme validé tant que
@@ -152,6 +157,8 @@ def principal() -> int:
     analyseur.add_argument("--demarche", default=demarche.TYPE_DEMARCHE_PAR_DEFAUT)
     analyseur.add_argument("--liste", action="store_true")
     analyseur.add_argument("--modele", metavar="FICHIER")
+    analyseur.add_argument("--a-relire", action="store_true",
+                           help="avec --modele : n'écrire que les phrases pas encore relues")
     analyseur.add_argument("--importer", metavar="FICHIER")
     analyseur.add_argument("--valider", action="store_true",
                            help="marquer validées les phrases importées")
@@ -178,7 +185,17 @@ def principal() -> int:
         return 2
 
     if arguments.modele:
-        return _ecrire_modele(phrases, arguments.modele)
+        # Sans ce filtre, le modèle contenait les 64 phrases, déjà relues
+        # comprises. Or `--importer --valider` marque validée toute ligne
+        # REMPLIE : rapporter le fichier entier après n'avoir revu que les
+        # nouvelles revalidait les anciennes sans que personne ne les ait
+        # relues, et l'historique d'atelier enregistrait cette relecture
+        # comme si elle avait eu lieu.
+        a_ecrire = [p for p in phrases if not p.valide] if arguments.a_relire else phrases
+        if arguments.a_relire and not a_ecrire:
+            print("Rien à relire : toutes les phrases sont déjà validées.")
+            return 0
+        return _ecrire_modele(a_ecrire, arguments.modele)
     if arguments.importer:
         return _importer(arguments.importer, arguments.valider, arguments.par, arguments.demarche)
     return _lister(phrases, atelier.avancement(arguments.demarche))

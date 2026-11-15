@@ -92,7 +92,7 @@ d'empiler indéfiniment.
 | `audio_recu` | audio reçu | `turn_id`, `octets` |
 | `status` | changement d'état | `state` ∈ `listening` \| `thinking` \| `speaking` |
 | `etape` | progression de la phase A | `etape` ∈ `transcription` \| `reflexion` |
-| `lent` | une étape dépasse 6 s | `etape` — à afficher (« ça prend un peu de temps… ») |
+| `lent` | une étape dépasse 6 s | `etape` ∈ `transcription` \| `reflexion` \| `enregistrement` \| `parole` — à afficher (« ça prend un peu de temps… ») |
 | `transcription` | ASR terminé | `texte` |
 | `dossier_mis_a_jour` | dossier créé/modifié | `dossier_id`, `numero_suivi`, `statut`… |
 | `attente_upload` | un document est attendu | `document_type`, `dossier_id` |
@@ -211,9 +211,15 @@ client de l'URL.
 3. **Lecture ordonnée des trames binaires** : une trame = une phrase ; les jouer
    dans l'ordre d'arrivée, et vider la file à la réception d'`interrompu`.
 4. **Ignorer les types inconnus** : le protocole s'étend sans casser le client.
-5. **Afficher `lent`** plutôt que laisser croire à un blocage (les services ASR
+5. **Ne pas se fier au champ `etape` de `lent` pour choisir un libellé.** Le
+   client doit afficher un seul message d'attente, quelle qu'en soit l'étape :
+   le jeu de valeurs s'est déjà élargi une fois (ajout de `enregistrement` et
+   `parole` le 2026-11-05), et un `switch` exhaustif sur cette valeur casserait
+   au prochain ajout. Le mobile actuel fait bien : il ne lit que le type et
+   positionne un unique drapeau `estLent`.
+6. **Afficher `lent`** plutôt que laisser croire à un blocage (les services ASR
    et TTS peuvent démarrer à froid).
-6. **Ne jamais supposer qu'un dossier est envoyé** sans `dossier_mis_a_jour` : la
+7. **Ne jamais supposer qu'un dossier est envoyé** sans `dossier_mis_a_jour` : la
    confirmation vient du serveur, jamais d'une déduction locale.
 
 ---

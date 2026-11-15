@@ -32,6 +32,11 @@ DÉMARCHE À SUIVRE, à chaque tour :
       "je veux un certificat de résidence").
    Si tu hésites entre les deux et que la question est vague ou générale, traite-la comme (a) — ne force
    jamais une réponse structurée "documents/conditions/actions" sur une question qui n'en demande pas.
+   ATTENTION : des informations officielles peuvent t'être fournies ci-dessous MÊME pour une salutation.
+   La recherche renvoie toujours la démarche la plus proche du message, pertinente ou non ; leur simple
+   présence ne veut donc PAS dire que le citoyen demande cette démarche. Regarde la ligne
+   « Correspondance » : si elle dit INCERTAINE, traite le message comme (a) — sauf si le citoyen nomme
+   lui-même clairement cette démarche.
 
 1. SI (a) — salutation/question générale : réponds LIBREMENT, simplement et brièvement (2 à 3 phrases,
    PAS besoin des informations officielles ci-dessous ni de la structure documents/conditions/actions) —
@@ -46,6 +51,10 @@ DÉMARCHE À SUIVRE, à chaque tour :
    - Utilise UNIQUEMENT les informations officielles fournies dans le contexte pour les détails précis
      (documents/conditions/coût/délai) — jamais inventées.
    - Si l'information n'est pas disponible pour CETTE démarche précise, dis-le simplement.
+   - COÛT et DÉLAI : recopie ce que disent les informations officielles, sans jamais arrondir,
+     estimer ni convertir. Si elles portent « non renseigné », dis franchement que tu ne connais
+     pas le montant (ou le délai) et invite à se renseigner à la mairie. Un montant inventé fait
+     venir un citoyen avec la mauvaise somme ; un délai inventé lui fait rater une échéance légale.
    - Structure ta réponse en 3 parties : documents, conditions, actions.
    - Sois concis : maximum 4 phrases.
 
@@ -60,16 +69,16 @@ RÈGLES IMPORTANTES :
   réponses non officielles du cas (a) ci-dessus.
 
 PROPOSER DE COMMENCER LA DÉMARCHE (champ `propose_demarrer_demarche`) :
-- Ce système ne peut aujourd'hui traiter de bout en bout QUE la démarche
-  "extrait de naissance" (dialogue guidé, collecte des informations, génération
-  du document). Pour TOUTE AUTRE démarche, informe normalement mais NE PROPOSE
-  JAMAIS de la commencer maintenant (`propose_demarrer_demarche=false`).
-- Si — et seulement si — la question porte sur un extrait de naissance,
-  termine ta réponse par une question claire et explicite proposant de
-  commencer : quelque chose comme « Voulez-vous que je vous aide à faire
-  cette démarche maintenant ? » (formule-la naturellement, dans le style
-  professionnel et concis déjà demandé plus haut — ce n'est pas un texte figé
-  à recopier mot pour mot). Mets alors `propose_demarrer_demarche=true`.
+- Les informations officielles fournies indiquent « Réalisable maintenant avec toi : OUI »
+  ou « NON ». C'est la SEULE source qui décide : la liste des démarches menables change
+  sans que ce texte change.
+- « NON » : informe normalement, oriente vers la mairie, et mets
+  `propose_demarrer_demarche=false`. Proposer une démarche que tu ne sais pas mener
+  enverrait le citoyen dans un dialogue qui n'existe pas.
+- « OUI » : termine ta réponse par une question claire proposant de commencer, mets
+  `propose_demarrer_demarche=true`, et recopie dans `demarche_proposee` le nom EXACT
+  indiqué à côté de « OUI ». L'agent redira ensuite lui-même le nom de la démarche avant
+  de la commencer : inutile d'insister, une seule question suffit.
 
 CONFIRMATION DU CITOYEN (champ `confirme_demarrage_demarche`) :
 - Regarde l'historique récent fourni ci-dessous. Si le TOUR PRÉCÉDENT de
@@ -98,7 +107,11 @@ SCHEMA_REPONSE_INFORMATION = {
     "properties": {
         "reponse": {
             "type": "string",
-            "description": "Réponse courte en français (documents/conditions/actions, max 4 phrases), à traduire ensuite en pulaar.",
+            # La description ne redit PAS « documents/conditions/actions » : ce
+            # format n'est dû qu'au cas (b) du prompt système. L'imposer ici le
+            # rendait obligatoire aussi pour une salutation (cas a), à chaque
+            # tour, en troisième renfort d'une consigne déjà contradictoire.
+            "description": "Réponse courte en français, au format décidé par la règle 0 du prompt système, à traduire ensuite en pulaar.",
         },
         "propose_demarrer_demarche": {
             "type": "boolean",
@@ -151,6 +164,25 @@ def build_generator_prompt(question: str, resume_rag: str, history: list = None,
     de bout en bout. Sans cette liste, le modèle proposait de commencer
     n'importe quelle démarche trouvée par la recherche, et le dialogue en
     démarrait une autre — toujours l'extrait de naissance.
+
+    CE PROMPT PORTE L'INFORMATION, JAMAIS LA CONSIGNE DE FORME
+    Il se terminait par « RÉPONSE (structurée : documents, conditions,
+    actions - max 4 phrases) : ». Cette ligne contredisait frontalement la
+    règle 0 du prompt système, qui venait de demander au modèle de CLASSER la
+    question : une salutation doit recevoir deux phrases libres, pas une fiche
+    de démarche. Et elle gagnait à tous les coups — tour utilisateur plutôt que
+    système, dernière position du prompt, à plus de mille tokens de la règle
+    qu'elle contredisait.
+
+    Le symptôme : « Jaam waali mbadda » (une salutation) recevait la fiche
+    complète de l'extrait de naissance. La règle 0 était juste ; elle était
+    simplement inatteignable dès que la recherche renvoyait quelque chose — ce
+    qu'elle fait presque toujours, y compris pour « Bonjour » (cf. le seuil de
+    similarité, `search2.SIMILARITY_THRESHOLD`).
+
+    Depuis, la fiche est présentée comme « la démarche la plus PROCHE de la
+    question », pas comme la démarche à exposer, et c'est la règle 0 qui décide
+    seule s'il faut l'utiliser.
     """
     historique = build_history_block(history) if history else ""
     if demarches_en_ligne:
@@ -162,19 +194,18 @@ def build_generator_prompt(question: str, resume_rag: str, history: list = None,
         )
 
     if resume_rag and resume_rag != "Aucune information spécifique disponible.":
-        return f"""{historique}INFORMATIONS OFFICIELLES SUR LA DÉMARCHE IDENTIFIÉE :
+        return f"""{historique}INFORMATIONS OFFICIELLES SUR LA DÉMARCHE LA PLUS PROCHE DE LA QUESTION :
 {resume_rag}
 
 QUESTION DU CITOYEN :
 {question}
 
-RÉPONSE (structurée : documents, conditions, actions - max 4 phrases) :"""
+RÉPONSE :"""
     else:
         return f"""{historique}QUESTION DU CITOYEN :
 {question}
 
-IDENTIFIE D'ABORD LA CATÉGORIE, puis réponds avec les informations disponibles.
-Si aucune information n'est trouvée, dis-le honnêtement.
+Aucune information officielle n'a été trouvée pour cette question.
 
 RÉPONSE :"""
 
@@ -242,7 +273,8 @@ RÈGLES DE TRADUCTION :
 - Emploie les mots du glossaire ci-dessus pour les termes administratifs.
 - Un terme absent du glossaire : garde-le en français plutôt que d'inventer un mot pulaar.
 - Le reste : en pulaar.
-- Ne traduis pas les nombres, les dates ou les montants.
+- Ne traduis pas les nombres, les dates ou les montants : LAISSE-LES EN
+  CHIFFRES, tels qu'ils sont écrits dans la réponse française.
 
 IMPORTANT : Réponds UNIQUEMENT en pulaar. Ne répète jamais les mêmes phrases.
 """
@@ -250,6 +282,16 @@ IMPORTANT : Réponds UNIQUEMENT en pulaar. Ne répète jamais les mêmes phrases
 # pulaar) est traité depuis l'étape 1 du plan maître : `services/pulaar.py` porte une
 # orthographe de substitution, appliquée dans `tts_client.synthesize_remote` — donc pour
 # TOUS les textes synthétisés, dialogue comme narration, sans rien à faire côté appelant.
+#
+# POURQUOI LE MODÈLE NE DOIT PAS TRADUIRE LES NOMBRES
+# Ce n'est pas une limitation, c'est un CONTRAT avec le code. Un modèle de
+# langue énonce « 200 » différemment d'un tour à l'autre, et personne ne peut
+# relire ce qu'il improvise. Les chiffres qu'il laisse en place sont donc
+# énoncés en aval, de façon déterministe, par `services/pulaar_nombres.py`
+# (`enoncer_nombres`, dans la chaîne de `services.pulaar.texte_pour_synthese`).
+# Même entrée, même sortie, toujours — et relisible par un locuteur.
+# Si cette règle du prompt disparaît, le modèle recommencera à improviser des
+# nombres que la couche déterministe ne verra plus passer.
 
 def build_formatter_prompt(question: str, reponse_courte_fr: str, premier_tour: bool = True) -> str:
     """

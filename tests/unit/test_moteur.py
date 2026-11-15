@@ -31,7 +31,9 @@ class Espion:
         self.evenements = []
         self.maj = []
         self.dossiers_crees = []
-        self.analyse_information = {"reponse": "Il faut un certificat.", "propose_demarrer_demarche": True, "confirme_demarrage_demarche": False}
+        self.analyse_information = {"reponse": "Il faut un certificat.", "propose_demarrer_demarche": True,
+                                    "confirme_demarrage_demarche": False,
+                                    "demarche_proposee": "Extrait de naissance"}
         self.analyse_correction = {"intention": "refuse_sans_precision", "champ": None, "nouvelle_valeur": None}
         self.resultat_collecte = {"reponse_fr": "Quel âge a votre enfant ?", "document_attendu": None, "phase_suivante": "collecte"}
         self.resultat_document = None
@@ -91,18 +93,21 @@ def _etat(**extra):
     return etat
 
 
-async def test_information_sans_bascule(espion):
+async def test_information_sans_bascule(espion, deux_demarches):
     etat = _etat()
     resultat = await moteur.traiter_message(etat, "Comment avoir un extrait ?", espion.deps())
-    assert resultat.reponse_fr == "Il faut un certificat."
+    # La réponse du modèle, SUIVIE de la phrase fixe qui nomme la démarche.
+    assert resultat.reponse_fr.startswith("Il faut un certificat.")
     assert etat["mode"] == "information"
     assert etat["dernier_tour_propose_demarche"] is True
+    assert etat["demarche_proposee"] == "extrait_naissance"
     assert [h["role"] for h in etat["historique"]] == ["user", "assistant"]
 
 
-async def test_bascule_confirmee_cree_le_dossier_et_enchaine_la_collecte(espion):
-    etat = _etat(dernier_tour_propose_demarche=True)
-    espion.analyse_information = {"reponse": "", "propose_demarrer_demarche": False, "confirme_demarrage_demarche": True}
+async def test_bascule_confirmee_cree_le_dossier_et_enchaine_la_collecte(espion, deux_demarches):
+    etat = _etat(dernier_tour_propose_demarche=True, demarche_proposee="extrait_naissance")
+    espion.analyse_information = {"reponse": "", "propose_demarrer_demarche": False,
+                                  "confirme_demarrage_demarche": True, "demarche_proposee": None}
     resultat = await moteur.traiter_message(etat, "Oui je veux commencer", espion.deps())
     assert etat["mode"] == "administratif" and etat["dossier_id"] == "dossier-1"
     assert espion.dossiers_crees == [("citoyen-1", "commune-1")]
@@ -129,6 +134,33 @@ async def test_collecte_complete_impose_la_relecture(espion):
     assert etat["phase"] == "relecture_en_cours"
     assert "Est-ce que tout est exact" in resultat.reponse_fr
     assert etat["cas_legal"] == "dans_les_delais"
+
+
+async def test_une_demarche_sans_les_champs_de_la_naissance_va_jusqu_a_la_relecture(espion):
+    # Régression : la relecture n'était déclenchée que si des champs propres à
+    # l'extrait de naissance étaient remplis. La constatation de mariage et la
+    # déclaration de décès n'en ont aucun : elles ne pouvaient jamais aboutir.
+    etat = _etat(mode="administratif", dossier_id="dossier-1", type_demarche="constatation_mariage",
+                 slots={"date_ceremonie": "2026-09-01", "nom_epoux": "Modou Diallo"})
+    espion.resultat_collecte = {"reponse_fr": None, "document_attendu": None,
+                                "phase_suivante": "complet", "manquants": []}
+    resultat = await moteur.traiter_message(etat, "Oui", espion.deps())
+
+    assert etat["phase"] == "relecture_en_cours"
+    assert "Est-ce que tout est exact" in resultat.reponse_fr
+
+
+async def test_un_champ_manquant_repose_la_question_au_lieu_de_tourner_en_rond(espion):
+    # Le dialogue se croit fini alors qu'un champ obligatoire est vide. Sans
+    # issue, l'agent répétait « je n'ai pas bien compris » indéfiniment.
+    etat = _etat(mode="administratif", dossier_id="dossier-1", slots=_slots_complets())
+    espion.resultat_collecte = {"reponse_fr": None, "document_attendu": None,
+                                "phase_suivante": "complet", "manquants": ["nom_mere"]}
+    resultat = await moteur.traiter_message(etat, "Oui", espion.deps())
+
+    assert resultat.reponse_fr == "Quel est le nom complet de la maman ?"
+    assert etat["phase"] == "collecte", "la collecte doit reprendre, pas s'arrêter"
+    assert "pas bien compris" not in resultat.reponse_fr
 
 
 async def test_relecture_oui_envoie_et_clot_la_session(espion):
@@ -268,12 +300,15 @@ async def test_les_cases_a_remplir_sont_celles_de_cette_demarche(espion, deux_de
     assert "prenoms_epoux" in etat["slots"] and "nom_enfant" not in etat["slots"]
 
 
-async def test_sans_demarche_reconnue_on_garde_celle_par_defaut(espion, deux_demarches):
-    etat = _etat(dernier_tour_propose_demarche=True)
+async def test_sans_demarche_reconnue_on_ne_bascule_pas(espion, deux_demarches):
+    # Avant, on démarrait l'extrait de naissance par défaut : un citoyen venu
+    # déclarer un décès s'entendait demander l'âge de son enfant.
+    etat = _etat(dernier_tour_propose_demarche=True, demarche_proposee=None)
     espion.analyse_information = {"reponse": "", "propose_demarrer_demarche": False,
                                   "confirme_demarrage_demarche": True, "demarche_proposee": None}
     await moteur.traiter_message(etat, "Oui", espion.deps())
-    assert etat["type_demarche"] == "extrait_naissance"
+    assert etat["mode"] == "information"
+    assert espion.dossiers_crees == []
 
 
 async def test_une_demarche_inventee_par_le_modele_n_est_pas_retenue(espion, deux_demarches):
@@ -283,3 +318,137 @@ async def test_une_demarche_inventee_par_le_modele_n_est_pas_retenue(espion, deu
                                   "demarche_proposee": "Passeport biométrique"}
     await moteur.traiter_message(etat, "Je veux un passeport", espion.deps())
     assert etat["demarche_proposee"] is None
+
+
+# ============================================================================
+# Les trois verrous de la bascule (correctifs demandés avant l'étape 5.6)
+# ============================================================================
+
+PHRASES = {
+    "bascule_confirmation": {
+        "cle": "bascule_confirmation",
+        "francais": "Je vais vous aider pour : {demarche}. Voulez-vous que nous commencions maintenant ?",
+        "pulaar": "Mi wallay ma e : {demarche}. Aɗa yiɗi en fuɗɗoo jooni?",
+        "pulaar_valide": True,
+    },
+    "bascule_demarche_inconnue": {
+        "cle": "bascule_demarche_inconnue",
+        "francais": "Je n'ai pas compris quelle démarche. Je peux vous aider pour : {demarches}.",
+        "pulaar": "Mi faamaani. Mi waawi wallude ma e : {demarches}.",
+        "pulaar_valide": True,
+    },
+}
+
+
+@pytest.fixture
+def phrases_fixes(monkeypatch, deux_demarches):
+    from services import demarche as service_demarche
+
+    monkeypatch.setattr(service_demarche, "_phrases_systeme", lambda: PHRASES)
+    service_demarche.vider_cache()
+
+
+async def test_l_agent_nomme_la_demarche_avant_de_commencer(espion, phrases_fixes):
+    # C'est le seul moment où le citoyen peut encore dire non — et il ne peut
+    # pas le faire si personne ne lui dit de quoi il s'agit.
+    etat = _etat()
+    espion.analyse_information = {"reponse": "Voici les pièces.", "propose_demarrer_demarche": True,
+                                  "confirme_demarrage_demarche": False,
+                                  "demarche_proposee": "Constatation de mariage"}
+    resultat = await moteur.traiter_message(etat, "Je veux constater mon mariage", espion.deps())
+    assert "Constatation de mariage" in resultat.reponse_fr
+    assert etat["demarche_proposee"] == "constatation_mariage"
+
+
+async def test_la_phrase_qui_nomme_la_demarche_garde_son_pulaar_relu(espion, phrases_fixes):
+    # Sinon elle repart au traducteur à chaque conversation, alors que c'est
+    # la phrase la plus importante du mode information.
+    etat = _etat()
+    await moteur.traiter_message(etat, "Un extrait de naissance", espion.deps())
+    resultat = await moteur.traiter_message(etat, "Un extrait de naissance", espion.deps())
+    dite = [m for m in resultat.reponse.morceaux if m.origine == "systeme:bascule_confirmation"]
+    assert dite and dite[0].pulaar_pret() == "Mi wallay ma e : Extrait de naissance. Aɗa yiɗi en fuɗɗoo jooni?"
+
+
+async def test_un_pulaar_qui_a_perdu_le_trou_n_est_pas_dit(espion, phrases_fixes, monkeypatch):
+    # Un relecteur peut avoir traduit ou supprimé {demarche} : la phrase
+    # dirait alors « je vais vous aider pour : » sans rien nommer.
+    from services import demarche as service_demarche
+    sans_trou = {**PHRASES, "bascule_confirmation": {**PHRASES["bascule_confirmation"],
+                                                     "pulaar": "Mi wallay ma. Aɗa yiɗi?"}}
+    monkeypatch.setattr(service_demarche, "_phrases_systeme", lambda: sans_trou)
+    service_demarche.vider_cache()
+    etat = _etat()
+    await moteur.traiter_message(etat, "Un extrait de naissance", espion.deps())
+    resultat = await moteur.traiter_message(etat, "Un extrait de naissance", espion.deps())
+    dite = [m for m in resultat.reponse.morceaux if m.origine == "systeme:bascule_confirmation"]
+    assert dite and dite[0].pulaar_pret() is None
+
+
+async def test_un_oui_flou_ne_cree_pas_de_dossier(espion, phrases_fixes):
+    # Le modèle dit « il a confirmé » ; le code, lui, n'entend pas de oui.
+    etat = _etat(dernier_tour_propose_demarche=True, demarche_proposee="constatation_mariage")
+    espion.analyse_information = {"reponse": "", "propose_demarrer_demarche": False,
+                                  "confirme_demarrage_demarche": True, "demarche_proposee": None}
+    resultat = await moteur.traiter_message(etat, "euh, le mariage de ma sœur…", espion.deps())
+    assert etat["mode"] == "information"
+    assert espion.dossiers_crees == []
+    # Et on redemande en nommant la démarche, au lieu de rester muet.
+    assert "Constatation de mariage" in resultat.reponse_fr
+    assert etat["demarche_proposee"] == "constatation_mariage"
+
+
+async def test_un_non_clair_annule_la_proposition(espion, phrases_fixes):
+    etat = _etat(dernier_tour_propose_demarche=True, demarche_proposee="constatation_mariage")
+    espion.analyse_information = {"reponse": "D'accord.", "propose_demarrer_demarche": False,
+                                  "confirme_demarrage_demarche": True, "demarche_proposee": None}
+    await moteur.traiter_message(etat, "Non, ce n'est pas ça", espion.deps())
+    assert etat["mode"] == "information"
+    assert etat["dernier_tour_propose_demarche"] is False
+    assert etat["demarche_proposee"] is None
+    assert espion.dossiers_crees == []
+
+
+async def test_un_oui_franc_bascule_bien(espion, phrases_fixes):
+    # Le verrou ne doit pas empêcher la démarche de commencer quand elle doit.
+    etat = _etat(dernier_tour_propose_demarche=True, demarche_proposee="constatation_mariage")
+    espion.analyse_information = {"reponse": "", "propose_demarrer_demarche": False,
+                                  "confirme_demarrage_demarche": True, "demarche_proposee": None}
+    await moteur.traiter_message(etat, "Oui, allons-y", espion.deps())
+    assert etat["mode"] == "administratif" and etat["type_demarche"] == "constatation_mariage"
+
+
+async def test_une_demarche_inconnue_fait_lister_celles_qui_existent(espion, phrases_fixes):
+    etat = _etat()
+    espion.analyse_information = {"reponse": "Pour un passeport, allez à la police.",
+                                  "propose_demarrer_demarche": True, "confirme_demarrage_demarche": False,
+                                  "demarche_proposee": "Passeport biométrique"}
+    resultat = await moteur.traiter_message(etat, "Je veux un passeport", espion.deps())
+    assert "Extrait de naissance" in resultat.reponse_fr and "Constatation de mariage" in resultat.reponse_fr
+    assert etat["dernier_tour_propose_demarche"] is False
+    assert etat["demarche_proposee"] is None
+
+
+async def test_un_oui_apres_une_demarche_inconnue_ne_bascule_pas(espion, phrases_fixes):
+    etat = _etat()
+    espion.analyse_information = {"reponse": "", "propose_demarrer_demarche": True,
+                                  "confirme_demarrage_demarche": False,
+                                  "demarche_proposee": "Passeport biométrique"}
+    await moteur.traiter_message(etat, "Je veux un passeport", espion.deps())
+    espion.analyse_information = {"reponse": "", "propose_demarrer_demarche": False,
+                                  "confirme_demarrage_demarche": True, "demarche_proposee": None}
+    await moteur.traiter_message(etat, "Oui", espion.deps())
+    assert etat["mode"] == "information" and espion.dossiers_crees == []
+
+
+async def test_un_oui_que_le_modele_ne_lit_pas_comme_un_accord_ne_bascule_pas(espion, phrases_fixes):
+    # « Oui » peut répondre à autre chose que la proposition — « oui, c'est
+    # bien mon quartier ». Les deux avis doivent concorder : le mot entendu
+    # ET le sens compris. Dans le doute, on redemande ; on n'ouvre pas de
+    # dossier au nom de quelqu'un.
+    etat = _etat(dernier_tour_propose_demarche=True, demarche_proposee="constatation_mariage")
+    espion.analyse_information = {"reponse": "", "propose_demarrer_demarche": False,
+                                  "confirme_demarrage_demarche": False, "demarche_proposee": None}
+    resultat = await moteur.traiter_message(etat, "Oui", espion.deps())
+    assert etat["mode"] == "information" and espion.dossiers_crees == []
+    assert "Constatation de mariage" in resultat.reponse_fr

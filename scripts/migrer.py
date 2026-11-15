@@ -48,6 +48,16 @@ from urllib.parse import urlsplit
 
 _RACINE_ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, _RACINE_)
+
+# Comme tous les autres scripts du projet. Sans cela, `DATABASE_URL` devait
+# être exportée à la main alors qu'elle est déjà dans `.env` : le script
+# répondait « DATABASE_URL absent de l'environnement » à quelqu'un qui l'avait
+# sous les yeux. `load_dotenv` n'écrase pas une variable déjà posée, donc une
+# valeur exportée volontairement l'emporte toujours.
+from dotenv import load_dotenv  # noqa: E402
+
+load_dotenv(os.path.join(_RACINE_, ".env"))
+
 from services.console import adoucir_sortie  # noqa: E402
 
 adoucir_sortie()

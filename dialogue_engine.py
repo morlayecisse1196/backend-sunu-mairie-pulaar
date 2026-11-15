@@ -108,7 +108,19 @@ SLOTS_REQUIS_RELECTURE = [
 
 
 def slots_manquants(slots: dict) -> list:
-    """Liste les slots requis (cf. SLOTS_REQUIS_RELECTURE + age_enfant) encore vides."""
+    """
+    Liste les slots requis (cf. SLOTS_REQUIS_RELECTURE + age_enfant) encore vides.
+
+    ⚠️ HÉRITÉ, ET SPÉCIFIQUE À L'EXTRAIT DE NAISSANCE. Cette liste est écrite
+    dans le code : pour la constatation de mariage ou la déclaration de décès,
+    elle réclame éternellement des champs qui n'existent pas dans ces
+    démarches. Elle a empêché ces deux dialogues d'aboutir jusqu'au correctif
+    de l'étape 5.
+
+    Pour savoir s'il reste quelque chose à demander, utilisez
+    `slot_controller.champs_obligatoires_manquants`, qui lit la DÉFINITION de
+    la démarche. Ne rebranchez pas celle-ci dans le moteur.
+    """
     manquants = [cle for cle in SLOTS_REQUIS_RELECTURE if slots.get(cle) is None]
     age = slots.get("age_enfant") or {}
     if age.get("valeur") is None or not age.get("unite"):
@@ -217,6 +229,34 @@ CHAMPS_FORMULAIRE_PAR_TYPE_DOCUMENT = {
         # §1 du roadmap : le passage au tribunal reste physique).
         "tribunalOuJuge", "dateJugementLettres", "numeroJugementLettres",
         "numeroJugementChiffres", "dateInscriptionRegistre", "anneeJugement",
+    ],
+    # Idem pour le certificat de mariage constaté (étape 5.5) : le document de
+    # SORTIE, pas une pièce photographiée. Le dialogue collecte tout ce qui
+    # concerne les époux ; ce qui reste ici vient du REGISTRE PAPIER que le
+    # consultant a sous les yeux — numéro et année du registre, mentions « en
+    # toutes lettres », signataire. Sans ce formulaire, un dossier de mariage
+    # complet ne pouvait pas être généré : le consultant n'avait nulle part où
+    # saisir ces champs, et la génération échouait sans recours.
+    # Ces noms sont ceux des attributs `cle` de templates/certificat_mariage_v1.xml.
+    "constatation_mariage": [
+        "numeroRegistreChiffres", "anneeRegistreLettres", "moisRegistreLettres",
+        "heureRegistreLettres", "minuteRegistreLettres",
+        "dateNaissanceEpouxLettres", "dateNaissanceEpouseLettres",
+        "dateCelebrationLettres", "dateEnregistrementLettres",
+        "typeCentre", "officierEtatCivil", "notesMentionsMarginales",
+    ],
+    # Acte de décès (étape 5.5). Le dialogue collecte tout ce qui concerne le
+    # défunt et le déclarant ; ce qui reste vient du registre papier, du
+    # certificat médical que le déclarant apporte (l'heure), ou de l'acte
+    # français donné en exemple et non demandé à l'oral au Sénégal (âge,
+    # profession et adresse du déclarant, nom du conjoint).
+    # Noms = attributs `cle` de templates/acte_deces_v1.xml.
+    "declaration_deces": [
+        "numeroActe", "typeCentre",
+        "dateNaissanceDefuntLettres", "nomConjointDefunt",
+        "dateDecesLettres", "heureDecesLettres", "dateDressageLettres",
+        "ageDeclarant", "professionDeclarant", "domicileDeclarant",
+        "officierEtatCivil", "notesMentionsMarginales",
     ],
 }
 

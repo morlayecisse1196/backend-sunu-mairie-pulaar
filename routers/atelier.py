@@ -19,7 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 
 from auth import get_current_admin
-from services import atelier, catalogue_audio, demarche, phrases
+from services import atelier, catalogue_audio, demarche, gabarits, phrases, simulateur
 from services.journal import obtenir_logger
 from tts_client import NARRATION_TIMEOUT_SECONDS, TTSError, synthesize_remote
 
@@ -38,6 +38,10 @@ class TraductionIn(BaseModel):
 
 class EcouteIn(BaseModel):
     pulaar: str = Field(min_length=1, max_length=LONGUEUR_MAX_PULAAR)
+    #: Démarche de la phrase écoutée. Nécessaire pour les seuls gabarits à
+    #: trous : c'est elle qui donne la définition des champs, donc des valeurs
+    #: d'exemple du bon type. Absente, un gabarit s'entend avec ses accolades.
+    demarche: Optional[str] = None
 
 
 @router.get("/phrases")
@@ -96,19 +100,66 @@ async def ecouter(corps: EcouteIn, admin: dict = Depends(get_current_admin)):
     pré-générer, sans aucun appel supplémentaire.
     """
     texte = corps.pulaar.strip()
-    deja = await catalogue_audio.audio_phrase(texte)
+
+    # Un gabarit à trous ne s'écoute pas tel quel. « {nom_enfant} » part au
+    # modèle vocal avec ses accolades et son tiret bas — trois caractères
+    # absents du vocabulaire, donc SILENCIEUSEMENT supprimés : le relecteur
+    # entend « nomenfant ». Or c'est précisément la jointure entre la phrase
+    # fixe et la valeur insérée qu'il doit juger.
+    #
+    # On remplit donc les trous avec le scénario du simulateur — les mêmes
+    # valeurs plausibles, pas des exemples inventés ici — pour qu'il entende
+    # ce qu'un citoyen entendra.
+    exemple = _rendre_avec_valeurs_d_exemple(texte, corps.demarche)
+    a_dire = exemple or texte
+
+    deja = await catalogue_audio.audio_phrase(a_dire)
     if deja is not None:
         return Response(content=deja, media_type="audio/wav",
                         headers={"X-Audio-Source": "pre-genere"})
     try:
-        audio = await synthesize_remote(texte, timeout=NARRATION_TIMEOUT_SECONDS)
+        audio = await synthesize_remote(a_dire, timeout=NARRATION_TIMEOUT_SECONDS)
     except TTSError as exc:
         # 503 et non 500 : le service vocal est temporairement indisponible,
         # l'interface doit proposer de réessayer, pas afficher un bug.
         raise HTTPException(status_code=503, detail=f"Service vocal indisponible : {exc}") from exc
-    await catalogue_audio.enregistrer_phrase(texte, audio)
-    return Response(content=audio, media_type="audio/wav",
-                    headers={"X-Audio-Source": "synthetise"})
+
+    # L'aperçu d'un gabarit n'est PAS rangé : son texte contient des valeurs
+    # d'exemple, il ne sera jamais rejoué tel quel à un citoyen. Le cacher
+    # remplirait le disque de phrases mortes.
+    if exemple is None:
+        await catalogue_audio.enregistrer_phrase(a_dire, audio)
+
+    return Response(
+        content=audio, media_type="audio/wav",
+        headers={
+            "X-Audio-Source": "apercu-gabarit" if exemple else "synthetise",
+            # L'interface doit pouvoir dire au relecteur que les noms et les
+            # dates entendus sont des exemples, pas le texte qu'il valide.
+            "X-Texte-Dit": "exemple" if exemple else "tel-quel",
+        },
+    )
+
+
+def _rendre_avec_valeurs_d_exemple(texte: str, type_demarche: Optional[str]) -> Optional[str]:
+    """
+    Le gabarit rempli de valeurs plausibles, ou `None` si ce n'en est pas un.
+
+    `None` aussi quand le rendu échoue : mieux vaut faire entendre les
+    accolades, et laisser le relecteur s'en étonner, que de taire un gabarit
+    cassé.
+    """
+    if not gabarits.trous(texte):
+        return None
+    if not type_demarche:
+        return None
+    try:
+        champs = demarche.champs(type_demarche)
+        slots = simulateur.scenario_type(type_demarche)
+        return gabarits.rendre(texte, slots, champs, gabarits.PULAAR)
+    except Exception as exc:  # noqa: BLE001 — l'écoute ne doit jamais échouer pour ça
+        log.warning("Aperçu de gabarit impossible (%s) — écoute du texte brut.", type(exc).__name__)
+        return None
 
 
 @router.get("/historique")

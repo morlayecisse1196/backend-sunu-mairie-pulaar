@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from dossiers_repo import create_remarque, list_documents_generes
+from dossiers_repo import create_remarque, list_documents_generes, update_document_genere_statut
 from services import db, evenements
 from services.journal import obtenir_logger
 
@@ -44,6 +44,19 @@ async def enregistrer_demande(
 
     documents = await db.executer(list_documents_generes, dossier["id"])
     document_genere_id = documents[0]["id"] if documents else None
+
+    # Le document refusé le dit. `documents_generes.statut` prévoit
+    # « corrections_demandees » depuis la migration 001, mais RIEN ne l'écrivait
+    # jamais : la version refusée restait marquée « Envoyé au citoyen » dans
+    # l'historique du consultant, qui ne pouvait pas distinguer un document en
+    # attente de réponse d'un document que le citoyen venait de rejeter.
+    # Best-effort : un échec ici ne doit pas faire perdre la remarque, qui est
+    # la seule chose irremplaçable de cet appel.
+    if document_genere_id:
+        if not await db.executer(update_document_genere_statut, document_genere_id, "corrections_demandees"):
+            log.warning(
+                "Statut du document %s non mis à jour après la remarque du citoyen", document_genere_id
+            )
 
     remarque = await db.executer(
         create_remarque, dossier["id"], texte, "citoyen", document_genere_id, champ_concerne

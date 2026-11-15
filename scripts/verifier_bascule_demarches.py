@@ -27,6 +27,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from demarches_repo import list_demarches  # noqa: E402
 from services import demarche  # noqa: E402
+from services.console import adoucir_sortie  # noqa: E402
+
+# Les symboles « ✓ », « ✗ » et « → » ci-dessous lèvent UnicodeEncodeError sur une
+# console Windows en cp1252 : le script meurt alors au milieu de sa sortie, parfois
+# en plein message d'erreur. `adoucir_sortie()` remplace le symbole fautif par « ? »
+# plutôt que de lever (voir services/console.py pour le choix de `errors="replace"`).
+adoucir_sortie()
 
 
 def principal() -> int:

@@ -29,9 +29,6 @@ def search_demarches(query: str, commune: Optional[str] = None, limit: int = 3) 
     # 1. Générer l'embedding de la question
     query_embedding = model.encode(query).tolist()
 
-    conn = get_db_connection()
-    cur = conn.cursor()
-
     filtre_commune = ""
     params = [query_embedding]
     if commune and commune != "National":
@@ -42,7 +39,15 @@ def search_demarches(query: str, commune: Optional[str] = None, limit: int = 3) 
 
     params.extend([query_embedding, limit])
 
-    cur.execute(f"""
+    # `with` sur la connexion ET sur le curseur : la connexion était fermée à
+    # la main juste après `fetchall()`, donc uniquement quand tout se passait
+    # bien. Une erreur SQL — un type de vecteur absent, un mot de passe changé,
+    # une table pas encore peuplée — laissait la connexion ouverte côté
+    # serveur. Comme cette fonction est appelée DANS la boucle de dialogue (une
+    # connexion neuve par question), chaque incident en fuyait une de plus
+    # jusqu'à épuiser les connexions du pooler.
+    with get_db_connection() as conn, conn.cursor() as cur:
+        cur.execute(f"""
         SELECT
             d.id,
             d.categorie,
@@ -61,11 +66,8 @@ def search_demarches(query: str, commune: Optional[str] = None, limit: int = 3) 
         {filtre_commune}
         ORDER BY de.embedding <=> %s::vector
         LIMIT %s;
-    """, params)
-
-    results = cur.fetchall()
-    cur.close()
-    conn.close()
+        """, params)
+        results = cur.fetchall()
 
     if not results:
         return []

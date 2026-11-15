@@ -42,6 +42,13 @@ ultralytics==8.4.138
 easyocr==1.7.2
 opencv-python==4.11.0.86
 
+# Traitement d'image hors OCR : allègement du tampon numérique avant stockage
+# (services/tampon_image.py). Pillow arrivait déjà en dépendance transitive
+# d'ultralytics et d'easyocr, mais s'en remettre à une transitive est fragile —
+# une mise à jour de l'un d'eux pourrait la retirer, et l'enregistrement d'un
+# tampon se dégraderait alors en silence.
+Pillow==12.3.0
+
 # --- Dev uniquement (scripts de test locaux, pas nécessaire sur le serveur) ---
 # websockets  # requis par test_audio_ws.py / test_audio_ws_complet.py
 # pypdf       # requis par test_document_generator.py (relecture du texte du PDF généré)

@@ -58,6 +58,10 @@ class _Table:
 
     def __init__(self, journal: list, nom: str):
         self.journal, self.nom, self._donnees = journal, nom, None
+        # Les filtres s'ACCUMULENT, comme un `.eq().eq()` réel qui les combine
+        # en ET. La doublure n'en gardait qu'un : elle ne pouvait donc pas voir
+        # qu'une mise à jour visait toutes les démarches à la fois.
+        self._filtres: dict = {}
 
     def update(self, donnees):
         self._donnees = donnees
@@ -68,12 +72,12 @@ class _Table:
         return self
 
     def eq(self, colonne, valeur):
-        self._filtre = (colonne, valeur)
+        self._filtres[colonne] = valeur
         return self
 
     def execute(self):
         if self._donnees is not None:
-            self.journal.append((self.nom, self._filtre, self._donnees))
+            self.journal.append((self.nom, dict(self._filtres), self._donnees))
         return type("R", (), {"data": []})()
 
 
@@ -140,8 +144,31 @@ class TestEnregistrement:
         atelier.enregistrer({"champ:nom_mere:question": "Innde neene ko honɗum?"})
         table, filtre, donnees = base[0]
         assert table == "demarche_champs"
-        assert filtre == ("nom_champ", "nom_mere")
+        assert filtre == {"nom_champ": "nom_mere", "type_demarche": "extrait_naissance"}
         assert donnees["question_pulaar"] == "Innde neene ko honɗum?"
+
+    def test_une_ecriture_ne_deborde_pas_sur_une_autre_demarche(self, base):
+        """
+        Les clés de ligne ne sont uniques QUE dans leur démarche. Mesuré sur la
+        base du projet : « recapitulatif » existe dans les trois démarches, et
+        `nom_declarant`, `nom_temoin_1`, `piece_temoin_1`, `livret_famille`,
+        `cni_declarant_recto`… dans deux — onze clés partagées en tout.
+
+        Sans filtre de démarche, relire une phrase de l'extrait de naissance
+        écrasait son homonyme dans la déclaration de décès ET la marquait
+        relue. Une traduction que personne n'avait lue se présentait alors
+        comme validée : précisément ce que `pulaar_valide` existe pour rendre
+        impossible.
+
+        `phrases_systeme` est l'exception voulue : ses phrases n'appartiennent
+        à aucune démarche et la table n'a pas de colonne `type_demarche`.
+        """
+        atelier.enregistrer({"systeme:confirmation_reponse": "Mi winndii."})
+        table, filtre, _ = base[0]
+        assert table == "phrases_systeme"
+        assert "type_demarche" not in filtre, (
+            "phrases_systeme est commune : la filtrer par démarche n'écrirait jamais rien"
+        )
 
     def test_une_relance_corrigee_ne_detruit_pas_ses_voisines(self, base):
         # Le tableau est écrit en entier : oublier les autres rangs les

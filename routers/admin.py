@@ -9,6 +9,8 @@ l'ouverture par un consultant, elle ne fait jamais passer un dossier de
 """
 from __future__ import annotations
 
+import asyncio
+
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -24,7 +26,7 @@ from dossiers_repo import (
     list_documents,
     list_documents_generes,
 )
-from services import acces, audit, db, evenements, notes
+from services import acces, audit, db, evenements, informations, notes, rag
 from services.journal import obtenir_logger
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -161,3 +163,45 @@ async def journal_activite(
     admin: dict = Depends(get_current_admin),
 ):
     return await audit.lister(limite=limite, action=action, acteur_id=acteur_id, cible_type=cible_type)
+
+
+# ============================================================================
+# Contenu du mode information (étape 5.6)
+# ============================================================================
+
+
+class FicheIn(BaseModel):
+    """Les colonnes de contenu à corriger ; le service tranche ce qu'il accepte."""
+
+    valeurs: dict = Field(default_factory=dict)
+
+
+@router.get("/informations")
+async def lister_informations(admin: dict = Depends(get_current_admin)):
+    """
+    Ce que l'agent répond aux questions des citoyens, avant toute démarche.
+
+    Ces fiches n'étaient modifiables qu'en base : un tarif ou un délai
+    périmé restait dit à chaque appel, avec l'assurance d'une information
+    officielle.
+    """
+    return {
+        "fiches": informations.lister(),
+        "modifiables": list(informations.COLONNES_MODIFIABLES),
+        "listes": list(informations.COLONNES_LISTES),
+        # Montré à l'écran : cette panne-là ne se voit nulle part ailleurs.
+        "recherche": await asyncio.to_thread(rag.diagnostic),
+    }
+
+
+@router.put("/informations/{fiche_id}")
+async def corriger_information(
+    fiche_id: str, corps: FicheIn, admin: dict = Depends(get_current_admin),
+):
+    """Corrige une fiche. Le nom et la catégorie ne se changent pas ici."""
+    try:
+        fiche = informations.modifier(
+            fiche_id, corps.valeurs, par=admin.get("email") or admin.get("id"))
+    except informations.ModificationRefusee as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"fiche": fiche}

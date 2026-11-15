@@ -29,7 +29,7 @@ from typing import Any, Callable, Optional
 
 import slot_controller
 from config import OPENROUTER_API_KEY
-from dialogue_engine import construire_recapitulatif, dossier_complet
+from dialogue_engine import construire_recapitulatif
 from dossiers_repo import create_dossier, generer_numero_suivi, resoudre_commune_id, update_dossier
 from prompts import SCHEMA_REPONSE_INFORMATION, SYSTEM_PROMPT_GENERATOR, build_generator_prompt
 from services import demarche, evenements, llm, phrases, rag
@@ -88,6 +88,10 @@ class ResultatTour:
     document_attendu: Optional[str] = None
     session_a_clore: bool = False
     dossier_mis_a_jour: Optional[dict] = None  # {"dossier_id", "statut", "numero_suivi"} — poussé au client
+    #: Où en est la démarche : `{"faites", "total"}`, poussé au client pour la
+    #: barre d'avancement. `None` = rien de nouveau à dire (mode information,
+    #: relecture, démarche bloquée) : le client garde alors ce qu'il affichait.
+    progression: Optional[dict] = None
     #: Les morceaux de la réponse, avec leur pulaar validé quand il existe
     #: (étape 3). `None` = rien de validé, le traducteur fait tout, comme avant.
     reponse: Optional[phrases.Reponse] = None
@@ -102,9 +106,9 @@ async def traiter_message(etat: dict, message: str, deps: Optional[Dependances] 
         # Garde-fou : une session terminée devrait déjà être close par l'appelant.
         resultat = ResultatTour(_message_fin(etat), session_a_clore=True)
     elif etat.get("mode") != "administratif":
-        reponse = await _tour_information(etat, message, deps)
-        if reponse is not None:
-            return _conclure(etat, ResultatTour(reponse or MESSAGE_REPETER))
+        resultat_information = await _tour_information(etat, message, deps)
+        if resultat_information is not None:
+            return _conclure(etat, resultat_information)
         resultat = await _tour_collecte(etat, message, deps)  # bascule confirmée : même message
     elif etat.get("phase") == "relecture_en_cours":
         resultat = await _tour_relecture(etat, message, deps)
@@ -130,7 +134,7 @@ async def apres_document_recu(etat: dict, deps: Optional[Dependances] = None) ->
     morceaux = resultat.get("reponse")
     reponse = resultat.get("reponse_fr") or ""
     document = _noter_document_attendu(etat, resultat.get("document_attendu"))
-    if resultat.get("phase_suivante") == "complet" and dossier_complet(etat["slots"]):
+    if resultat.get("phase_suivante") == "complet" and not (resultat.get("manquants") or []):
         recapitulatif = _recapitulatif(etat)
         reponse, morceaux = recapitulatif.francais, phrases.reponse(recapitulatif)
         etat["phase"] = "relecture_en_cours"
@@ -145,7 +149,33 @@ async def apres_document_recu(etat: dict, deps: Optional[Dependances] = None) ->
 # Étapes
 # ---------------------------------------------------------------------------
 
-async def _tour_information(etat: dict, message: str, deps: Dependances) -> Optional[str]:
+def _phrase_a_trous(cle: str, **remplacements: str) -> phrases.Phrase:
+    """
+    Une phrase système dont le code remplit les trous ({demarche}…).
+
+    Si le pulaar relu a PERDU le trou — un relecteur peut l'avoir traduit ou
+    supprimé — on renonce à ce pulaar : mieux vaut repasser par le traducteur
+    que dire une phrase à laquelle il manque le nom de la démarche.
+    """
+    phrase = demarche.phrase_systeme(cle)
+    francais, pulaar = phrase.francais, (phrase.pulaar if phrase.pulaar_valide else None)
+    for nom, valeur in remplacements.items():
+        trou = "{" + nom + "}"
+        francais = francais.replace(trou, valeur)
+        if pulaar is not None:
+            pulaar = pulaar.replace(trou, valeur) if trou in pulaar else None
+    return phrases.Phrase(francais=francais, pulaar=pulaar, pulaar_valide=bool(pulaar),
+                          origine=f"systeme:{cle}")
+
+
+def _reponse_information(texte: str, *fixes: phrases.Phrase) -> ResultatTour:
+    """La réponse du modèle, suivie s'il y a lieu d'une phrase fixe de l'agent."""
+    morceaux = phrases.reponse(texte or None, *fixes)
+    return ResultatTour(morceaux.francais or MESSAGE_REPETER,
+                        reponse=morceaux if morceaux.morceaux else None)
+
+
+async def _tour_information(etat: dict, message: str, deps: Dependances) -> Optional[ResultatTour]:
     """Réponse du mode information, ou None si la bascule vers le mode administratif est confirmée."""
     resultats = await deps.rechercher(message, etat.get("commune_profil"))
     traitables = await asyncio.to_thread(demarche.demarches_traitables)
@@ -161,20 +191,47 @@ async def _tour_information(etat: dict, message: str, deps: Dependances) -> Opti
         temperature=0.3,
     )
 
-    # Bascule confirmée si CE tour confirme ce que le tour PRÉCÉDENT proposait.
-    bascule = bool(etat.get("dernier_tour_propose_demarche")) and bool(analyse.get("confirme_demarrage_demarche"))
-    etat["dernier_tour_propose_demarche"] = bool(analyse.get("propose_demarrer_demarche"))
-    if etat["dernier_tour_propose_demarche"]:
+    texte = analyse.get("reponse") or ""
+    attendue = etat.get("demarche_proposee") if etat.get("dernier_tour_propose_demarche") else None
+
+    # --- Le tour précédent a proposé une démarche : on attend un oui ou un non.
+    if attendue:
+        entendu = classer_confirmation(message)
+        if entendu == "oui" and bool(analyse.get("confirme_demarrage_demarche")):
+            type_demarche = attendue
+        else:
+            if entendu == "non":
+                # Refus clair : on repart en information, sans démarche en attente.
+                etat["dernier_tour_propose_demarche"] = False
+                etat["demarche_proposee"] = None
+                return _reponse_information(texte)
+            # Ni oui ni non, ou le modèle n'y lit pas une confirmation : on
+            # REDEMANDE en nommant la démarche, au lieu d'ouvrir un dossier
+            # sur un « oui » supposé. Un dossier créé par erreur, lui, reste.
+            libelle = _libelle_demarche(attendue)
+            return _reponse_information(texte, _phrase_a_trous("bascule_confirmation", demarche=libelle))
+
+    # --- Sinon : le modèle propose-t-il de commencer, et laquelle ?
+    else:
+        propose = (demarche.reconnaitre_demarche(analyse.get("demarche_proposee"))
+                   if analyse.get("propose_demarrer_demarche") else None)
         # Retenue MAINTENANT : au tour suivant, le citoyen dit seulement
         # « oui », et plus rien ne dira de quelle démarche il parlait.
-        propose = demarche.reconnaitre_demarche(analyse.get("demarche_proposee"))
+        etat["dernier_tour_propose_demarche"] = propose is not None
         etat["demarche_proposee"] = propose.type_demarche if propose else None
-    if not bascule:
-        return analyse.get("reponse") or ""
-
-    # Sans cela, un citoyen qui venait faire constater son mariage se voyait
-    # demander l'âge de son enfant : le dialogue démarrait toujours la même.
-    type_demarche = etat.get("demarche_proposee") or TYPE_DEMARCHE_ADMINISTRATIVE
+        if analyse.get("propose_demarrer_demarche") and propose is None:
+            # Aucune démarche reconnue : on ne bascule PAS. Auparavant, on
+            # démarrait l'extrait de naissance par défaut, et un citoyen venu
+            # déclarer un décès s'entendait demander l'âge de son enfant.
+            libelles = ", ".join(d.libelle for d in traitables)
+            return _reponse_information(
+                texte, _phrase_a_trous("bascule_demarche_inconnue", demarches=libelles))
+        if propose is not None:
+            # L'agent NOMME la démarche avant de la commencer : c'est le seul
+            # moment où le citoyen peut encore dire non.
+            return _reponse_information(
+                texte, _phrase_a_trous("bascule_confirmation", demarche=propose.libelle))
+        return _reponse_information(texte)
     etat["mode"] = "administratif"
     etat["phase"] = "collecte"
     etat["type_demarche"] = type_demarche
@@ -223,19 +280,48 @@ async def _tour_collecte(etat: dict, message: str, deps: Dependances) -> Resulta
             libelle="Bloqué : une règle de la démarche interdit de poursuivre",
         )
 
-    if resultat.get("phase_suivante") == "complet" and dossier_complet(etat["slots"]):
+    if resultat.get("phase_suivante") == "complet":
         # RG7 : nœud obligatoire, décidé par le code (jamais par le modèle).
-        recapitulatif = _recapitulatif(etat)
-        reponse, morceaux = recapitulatif.francais, phrases.reponse(recapitulatif)
-        etat["phase"] = "relecture_en_cours"
-        etat["relances_relecture"] = 0
-        document = _noter_document_attendu(etat, None)
+        manquants = resultat.get("manquants") or []
+        if not manquants:
+            recapitulatif = _recapitulatif(etat)
+            reponse, morceaux = recapitulatif.francais, phrases.reponse(recapitulatif)
+            etat["phase"] = "relecture_en_cours"
+            etat["relances_relecture"] = 0
+            document = _noter_document_attendu(etat, None)
+        else:
+            reponse, morceaux = _redemander(etat, manquants, deps)
 
     await _persister_dossier(etat, deps)
+    avancement = resultat.get("progression")
     if not reponse:
         return ResultatTour(_phrase(MESSAGE_REPETER, "repeter").francais, document_attendu=document,
-                            reponse=phrases.reponse(_phrase(MESSAGE_REPETER, "repeter")))
-    return ResultatTour(reponse, document_attendu=document, reponse=morceaux)
+                            reponse=phrases.reponse(_phrase(MESSAGE_REPETER, "repeter")),
+                            progression=avancement)
+    return ResultatTour(reponse, document_attendu=document, reponse=morceaux, progression=avancement)
+
+
+def _redemander(etat: dict, manquants: list, deps: Dependances) -> tuple:
+    """
+    Le dialogue se croit fini, mais un champ obligatoire est vide.
+
+    Ne devrait pas arriver — c'est pourquoi c'est journalisé. Ce qui compte
+    est de ne pas laisser le citoyen devant un agent qui répète « je n'ai pas
+    bien compris » sans fin : on repose la question qui manque, et la collecte
+    reprend son cours.
+    """
+    log.error(
+        "Dialogue annoncé complet alors que %s manque(nt) (session=%s, démarche=%s)",
+        ", ".join(manquants), etat.get("id"), etat.get("type_demarche"),
+    )
+    etat["phase"] = "collecte"
+    definitions = deps.definition_champs(
+        etat.get("type_demarche", TYPE_DEMARCHE_ADMINISTRATIVE), etat.get("demarche_version")
+    )
+    par_nom = {d["nom_champ"]: d for d in definitions or []}
+    champ = par_nom.get(manquants[0])
+    question = demarche.question_champ(champ) if champ else _phrase(MESSAGE_REPETER, "repeter")
+    return question.francais, phrases.reponse(question)
 
 
 async def _tour_relecture(etat: dict, message: str, deps: Dependances) -> ResultatTour:
@@ -305,7 +391,15 @@ async def _appliquer_correction(etat: dict, definition: dict, nouvelle_valeur: O
             etat["slots"][nom] = valeur
             _recalculer_cas_legal(etat)
             await _persister_dossier(etat, deps)
-            if dossier_complet(etat["slots"]):
+            definitions = await asyncio.to_thread(
+                deps.definition_champs,
+                etat.get("type_demarche", TYPE_DEMARCHE_ADMINISTRATIVE),
+                etat.get("demarche_version"),
+            )
+            manquants = slot_controller.champs_obligatoires_manquants(
+                etat["slots"], definitions or [], etat.get("champs_ignores")
+            )
+            if not manquants:
                 return ResultatTour(f"C'est corrigé. {construire_recapitulatif(etat['slots'])}")
         else:
             prefixe = f"{raison} "
@@ -414,6 +508,11 @@ def _recapitulatif(etat: dict) -> phrases.Phrase:
     return phrases.Phrase(
         francais=construire_recapitulatif(etat["slots"]), origine="recapitulatif:repli"
     )
+
+
+def _libelle_demarche(type_demarche: str) -> str:
+    """Le nom lisible de la démarche, pour le dire au citoyen."""
+    return demarche.definition(type_demarche).libelle or type_demarche
 
 
 def _phrase(texte_par_defaut: str, cle: str) -> phrases.Phrase:

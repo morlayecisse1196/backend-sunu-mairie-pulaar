@@ -26,6 +26,14 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from services import catalogue_audio, llm  # noqa: E402
+from services.console import adoucir_sortie  # noqa: E402
+
+# La console Windows écrit en cp1252 : les « ✓ », « ✗ » et « → » des messages
+# ci-dessous y lèvent UnicodeEncodeError. Le script mourait donc APRÈS avoir
+# généré et écrit la première phrase, en essayant d'annoncer sa réussite — si
+# bien qu'il n'a jamais pu produire le catalogue sur cette plateforme, et que
+# `audio_cache/ui/` est resté vide. Il faut appeler ceci AVANT le premier print.
+adoucir_sortie()
 
 
 async def generer(cles: list[str], forcer: bool) -> int:

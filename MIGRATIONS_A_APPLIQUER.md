@@ -1,12 +1,42 @@
-# Migrations à appliquer — backend v3
+# Migrations — backend v3
 
-Les migrations **011 à 016 ne sont PAS appliquées** sur la base Supabase à la
-date d'écriture. Le code fonctionne sans elles, mais en mode dégradé **explicite** :
+> ## ⚠️ État réel au 2026-11-05 : **011 à 016 SONT appliquées**
+>
+> Ce document affirmait l'inverse, et c'était un piège : en le suivant, on
+> rejouait la **011** en production — celle qui coupe les écritures directes de
+> `profiles` par l'application mobile.
+>
+> Vérifié table par table contre la base Supabase du projet, le 2026-11-05 :
+>
+> | Migration | Objet vérifié | État |
+> |---|---|---|
+> | 011 | RLS sur `profiles` | appliquée |
+> | 012 | `notes_internes`, `dossier_evenements` | appliquée |
+> | 013 | `dialogue_sessions` (12 lignes) | appliquée |
+> | 014 | `notifications`, `appareils` | appliquée |
+> | 015 | colonnes `communes.latitude` / `longitude` | appliquée |
+> | 016 | `journal_audit` | appliquée |
+> | 017 → 023 | `demarche_regles`, `demarche_definitions`, `demarche_versions`, `phrases_systeme`, `demarche_gabarits`, `atelier_historique` | appliquées |
+>
+> Les journaux du serveur ne contiennent plus aucun « migration … absente »
+> au démarrage. **Le dialogue temps réel persiste donc bien son état** : un
+> redémarrage du serveur ne perd plus les dialogues en cours.
+>
+> **Reste à faire, et ce n'est pas une migration** : la 015 a créé les colonnes,
+> mais les coordonnées ne sont pas renseignées — `communes` contient 3 lignes,
+> **0 avec latitude/longitude**. `GET /communes/proche` ne peut donc rien
+> renvoyer. Les coordonnées doivent venir d'une source vérifiable, commune par
+> commune : une valeur inventée désignerait la mauvaise mairie à un citoyen qui
+> ne peut pas relire la liste.
+>
+> Les sections ci-dessous restent la référence du **contenu** de chaque
+> migration et de la façon de la vérifier. Chaque fichier est idempotent
+> (`if not exists`, `create or replace`), donc rejouable sans casser de
+> données — mais relire l'avertissement de la 011 avant de la rejouer.
+
+Le code fonctionne sans ces migrations, mais en mode dégradé **explicite** :
 il renvoie `503 {"code": "migration_manquante", "migration": "0XX"}` ou bascule en
 mode mémoire — jamais de crash, jamais de donnée inventée.
-
-Appliquer dans l'ordre : chaque fichier est idempotent (`if not exists`,
-`create or replace`), donc rejouable sans risque.
 
 ---
 

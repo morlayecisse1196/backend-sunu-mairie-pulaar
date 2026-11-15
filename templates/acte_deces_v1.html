@@ -1,0 +1,155 @@
+<!--
+  acte_deces_v1.html — étape 5.5 du plan maître.
+
+  Template Jinja2 : les variables viennent de acte_deces_v1.xml après
+  résolution (noms = attributs `cle` du template).
+
+  Mise en page reprise de la copie intégrale donnée en exemple : en-tête
+  mairie, numéro d'acte, puis UN SEUL paragraphe suivi — l'acte de décès est
+  rédigé d'un trait, pas en cases. La formule de clôture (« Dressé le ..., sur
+  la déclaration de ... ») est celle du modèle, à confirmer pour le Sénégal.
+
+  AUCUNE CAUSE DE DÉCÈS n'est imprimée : l'acte de la mairie n'en porte pas.
+
+  RAPPEL LÉGAL (§5.4) — DÉCISION DU PORTEUR DU PROJET, 2026-09-26 : le bandeau
+  « brouillon officiel » ne s'affiche que TANT QUE LE DOCUMENT N'EST PAS
+  TAMPONNÉ. La confirmation de l'administrateur suffit désormais à le faire
+  sauter : `communes.tampon_numerique_url` n'est écrit que par
+  `admin_repo.confirmer_tampon`, qui journalise d'abord QUI a autorisé ce
+  tampon et QUAND (table `tampon_confirmations`, migration 006). Un document
+  tamponné est donc un document qu'un administrateur identifié a autorisé.
+  Ne jamais poser de tampon par un autre chemin : ce serait délivrer un acte
+  d'apparence officielle sans trace de qui l'a permis.
+-->
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Acte de décès — {{ defuntPrenoms }} {{ defuntNomFamille }}</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  body {
+    font-family: "Helvetica Neue", Arial, sans-serif;
+    font-size: 10.5pt;
+    color: #111;
+    margin: 0;
+    line-height: 1.6;
+  }
+  .filigrane {
+    text-align: center;
+    background: #fdf3d0;
+    border: 1px solid #c9a227;
+    color: #6b4e00;
+    font-weight: bold;
+    font-size: 9.5pt;
+    padding: 4px 8px;
+    margin-bottom: 8mm;
+  }
+  .delivre {
+    text-align: center;
+    background: #eef6ee;
+    border: 1px solid #4a7c4a;
+    color: #2c4f2c;
+    font-weight: bold;
+    font-size: 9.5pt;
+    padding: 4px 8px;
+    margin-bottom: 8mm;
+  }
+  .entete { display: flex; justify-content: space-between; margin-bottom: 8mm; }
+  .entete-gauche { width: 55%; font-weight: bold; text-transform: uppercase; font-size: 10pt; }
+  .entete-gauche p { margin: 1px 0; }
+  .entete-droite { width: 40%; text-align: center; font-size: 9.5pt; }
+  .entete-droite p { margin: 1px 0; }
+
+  h1 { text-align: center; font-size: 13pt; letter-spacing: 1px; margin: 8mm 0 2mm 0; }
+  .sous-titre { text-align: center; font-size: 10pt; margin: 0 0 8mm 0; }
+  .numero { font-weight: bold; margin-bottom: 6mm; }
+
+  .corps { text-align: justify; }
+  .corps strong { font-weight: bold; }
+  .paragraphe { margin-bottom: 5mm; }
+
+  .pied { margin-top: 10mm; }
+  .signature { text-align: right; margin-top: 4mm; }
+  .tampon {
+    max-width: 38mm;
+    max-height: 38mm;
+    margin-top: 3mm;
+    opacity: 0.92;
+  }
+  .mentions { margin-top: 12mm; border-top: 1px dashed #999; padding-top: 3mm; font-size: 8.5pt; color: #555; }
+</style>
+</head>
+<body>
+
+  {% if tampon %}
+  <div class="delivre">
+    DOCUMENT DÉLIVRÉ PAR LA MAIRIE — Suivi : {{ numero_suivi }}
+  </div>
+  {% else %}
+  <div class="filigrane">
+    DOCUMENT GÉNÉRÉ — BROUILLON OFFICIEL, À AUTHENTIFIER PAR L'OFFICIER D'ÉTAT CIVIL
+    — Suivi : {{ numero_suivi }}
+  </div>
+  {% endif %}
+
+  <div class="entete">
+    <div class="entete-gauche">
+      <p>Région de {{ region }}</p>
+      <p>Département de {{ departement }}</p>
+      {% if arrondissement %}<p>Arrondissement de {{ arrondissement }}</p>{% endif %}
+      <p>Commune de {{ collectiviteLocale }}</p>
+      {% if typeCentre %}<p>{{ typeCentre }}</p>{% endif %}
+      <p>{{ nomCentreEtatCivil }}</p>
+    </div>
+    <div class="entete-droite">
+      <p>République du Sénégal</p>
+      <p>Un Peuple – Un But – Une Foi</p>
+    </div>
+  </div>
+
+  <h1>ACTE DE DÉCÈS</h1>
+  <p class="sous-titre">Copie intégrale</p>
+
+  <p class="numero">Acte de décès n° {{ numeroActe }}</p>
+
+  <div class="corps">
+    <p class="paragraphe">
+      Le <strong>{{ dateDecesLettres }}</strong>{% if heureDecesLettres %}, à <strong>{{ heureDecesLettres }}</strong>{% endif %},
+      est {{ accord_decede }} à <strong>{{ lieuDeces }}</strong>, {{ communeDeces }},
+      <strong>{{ defuntPrenoms }} {{ defuntNomFamille }}</strong>,
+      de nationalité {{ defuntNationalite }}, {{ defuntProfession }},
+      domicilié{{ accord_e }} à <strong>{{ defuntDomicile }}</strong>,
+      né{{ accord_e }} le <strong>{{ defuntDateNaissanceLettres }}</strong>
+      à <strong>{{ defuntLieuNaissance }}</strong>,
+      {{ lien_filiation }} de <strong>{{ defuntNomPere }}</strong>
+      et de <strong>{{ defuntNomMere }}</strong>,
+      {{ situation_lettres }}{% if defuntConjoint %} de <strong>{{ defuntConjoint }}</strong>{% endif %}.
+    </p>
+
+    <p class="paragraphe">
+      Dressé le <strong>{{ dateDressageLettres }}</strong>, sur la déclaration de
+      <strong>{{ nomDeclarant }}</strong>{% if ageDeclarant %}, âgé de {{ ageDeclarant }} ans{% endif %}{% if professionDeclarant %}, {{ professionDeclarant }}{% endif %}{% if domicileDeclarant %}, demeurant à {{ domicileDeclarant }}{% endif %},
+      {{ lienAvecDefunt }} du défunt, qui, lecture faite et invité à lire l'acte,
+      a signé avec Nous.
+    </p>
+  </div>
+
+  <div class="pied">
+    <div class="signature">
+      <p>L'Officier de l'État Civil</p>
+      <p><strong>{{ officierEtatCivil }}</strong></p>
+      <p>Copie conforme à l'acte original conservé par la mairie de {{ lieuDelivrance }},</p>
+      <p>délivrée le {{ dateDelivrance }}</p>
+      {% if tampon %}
+      <img class="tampon" src="{{ tampon }}" alt="Tampon numérique de la mairie">
+      {% endif %}
+    </div>
+  </div>
+
+  {% if notesMentionsMarginales %}
+  <p class="mentions">Mentions marginales : {{ notesMentionsMarginales }}</p>
+  {% endif %}
+
+</body>
+</html>

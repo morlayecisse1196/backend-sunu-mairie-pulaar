@@ -111,7 +111,7 @@ async def lecture_du_document(dossier_id: str, user: dict = Depends(get_current_
             "phrase_fr": libelles_document.phrase_lecture(cle, valeurs.get(cle)),
             "audio_url": f"/mes-dossiers/{dossier_id}/document/lecture/{cle}/audio",
         }
-        for cle in libelles_document.ORDRE_LECTURE
+        for cle in libelles_document.ordre_lecture(dossier.get("type_demarche"))
         if cle in valeurs
     ]
     return {"champs": champs, "statut": dossier["statut"]}

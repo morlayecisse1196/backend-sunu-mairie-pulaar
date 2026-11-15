@@ -1,0 +1,188 @@
+<!--
+  certificat_mariage_v1.html — étape 5.5 du plan maître.
+
+  Template Jinja2 : les variables entre doubles accolades sont injectées par
+  document_generator.py après résolution des source="..." de
+  certificat_mariage_v1.xml. Les noms correspondent aux attributs `cle` de ce
+  template (epouxPrenoms, epouseNomFamille, ...) — voir l'explication de `cle`
+  en tête du XML.
+
+  Mise en page reprise du modèle réel fourni par le porteur du projet
+  (commune d'arrondissement de Fann - Point E - Amitié, centre secondaire,
+  registre n° 307) : bandeau administratif à gauche, République à droite,
+  mentions de registre, titre souligné, puis un texte suivi — ce certificat
+  est rédigé en prose, contrairement à l'extrait de naissance qui est un
+  formulaire à cases. Fidèle dans l'esprit (zones, libellés, ordre), pas un
+  fac-similé au trait près.
+
+  RAPPEL LÉGAL (§5.4) — DÉCISION DU PORTEUR DU PROJET, 2026-09-26 : le bandeau
+  « brouillon officiel » ne s'affiche que TANT QUE LE DOCUMENT N'EST PAS
+  TAMPONNÉ. La confirmation de l'administrateur suffit désormais à le faire
+  sauter : `communes.tampon_numerique_url` n'est écrit que par
+  `admin_repo.confirmer_tampon`, qui journalise d'abord QUI a autorisé ce
+  tampon et QUAND (table `tampon_confirmations`, migration 006). Un document
+  tamponné est donc un document qu'un administrateur identifié a autorisé.
+  Ne jamais poser de tampon par un autre chemin : ce serait délivrer un acte
+  d'apparence officielle sans trace de qui l'a permis.
+-->
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Certificat de mariage constaté — {{ epouxNomFamille }} et {{ epouseNomFamille }}</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  body {
+    font-family: "Helvetica Neue", Arial, sans-serif;
+    font-size: 10.5pt;
+    color: #111;
+    margin: 0;
+    line-height: 1.5;
+  }
+  .filigrane {
+    text-align: center;
+    background: #fdf3d0;
+    border: 1px solid #c9a227;
+    color: #6b4e00;
+    font-weight: bold;
+    font-size: 9.5pt;
+    padding: 4px 8px;
+    margin-bottom: 8mm;
+  }
+  .delivre {
+    text-align: center;
+    background: #eef6ee;
+    border: 1px solid #4a7c4a;
+    color: #2c4f2c;
+    font-weight: bold;
+    font-size: 9.5pt;
+    padding: 4px 8px;
+    margin-bottom: 8mm;
+  }
+  .entete { display: flex; justify-content: space-between; margin-bottom: 8mm; }
+  .entete-gauche { width: 55%; font-weight: bold; text-transform: uppercase; font-size: 10pt; }
+  .entete-gauche p { margin: 1px 0; }
+  .entete-droite { width: 40%; text-align: center; font-size: 9.5pt; }
+  .entete-droite p { margin: 1px 0; }
+
+  .registre p { margin: 2px 0; font-size: 10pt; }
+
+  h1 {
+    text-align: center;
+    font-size: 13pt;
+    text-decoration: underline;
+    margin: 9mm 0 8mm 0;
+  }
+
+  .partie { margin-bottom: 6mm; }
+  .partie p { margin: 1px 0; }
+  .identite { font-weight: bold; text-transform: uppercase; }
+  strong { font-weight: bold; }
+
+  .options { display: flex; justify-content: space-between; margin: 2mm 0; }
+
+  .pied { margin-top: 10mm; }
+  .signature { text-align: right; margin-top: 4mm; }
+  .tampon {
+    max-width: 38mm;
+    max-height: 38mm;
+    margin-top: 3mm;
+    opacity: 0.92;
+  }
+  .mentions {
+    margin-top: 12mm;
+    border-top: 1px dashed #999;
+    padding-top: 3mm;
+    font-size: 8.5pt;
+    color: #555;
+  }
+</style>
+</head>
+<body>
+
+  {% if tampon %}
+  <div class="delivre">
+    DOCUMENT DÉLIVRÉ PAR LA MAIRIE — Suivi : {{ numero_suivi }}
+  </div>
+  {% else %}
+  <div class="filigrane">
+    DOCUMENT GÉNÉRÉ — BROUILLON OFFICIEL, À AUTHENTIFIER PAR L'OFFICIER D'ÉTAT CIVIL
+    — Suivi : {{ numero_suivi }}
+  </div>
+  {% endif %}
+
+  <div class="entete">
+    <div class="entete-gauche">
+      <p>Région de {{ region }}</p>
+      <p>Ville de {{ departement }}</p>
+      {% if arrondissement %}<p>Arrondissement de {{ arrondissement }}</p>{% endif %}
+      <p>Commune de {{ collectiviteLocale }}</p>
+      {% if typeCentre %}<p>{{ typeCentre }}</p>{% endif %}
+      <p>{{ nomCentreEtatCivil }}</p>
+    </div>
+    <div class="entete-droite">
+      <p>République du Sénégal</p>
+      <p>Un Peuple – Un But – Une Foi</p>
+    </div>
+  </div>
+
+  <div class="registre">
+    <p>Registre N° <strong>{{ numeroRegistreChiffres }}</strong></p>
+    <p>L'an <strong>{{ anneeRegistreLettres }}</strong></p>
+    <p>Du mois de <strong>{{ moisRegistreLettres }}</strong>{% if heureRegistreLettres %}
+       à <strong>{{ heureRegistreLettres }}</strong> heure(s){% if minuteRegistreLettres %}
+       <strong>{{ minuteRegistreLettres }}</strong> minute(s){% endif %}{% endif %}</p>
+  </div>
+
+  <h1>CERTIFICAT DE MARIAGE CONSTATÉ</h1>
+
+  <p>
+    Nous, <strong>{{ officierEtatCivil }}</strong>, Officier d'État-Civil du
+    <strong>{{ nomCentreEtatCivil }}</strong>, certifions à tous ceux qu'il appartiendra que :
+  </p>
+
+  <div class="partie">
+    <p class="identite">{{ epouxPrenoms }} {{ epouxNomFamille }}</p>
+    <p>Profession <strong>{{ epouxProfession }}</strong>, domicilié à <strong>{{ epouxDomicile }}</strong></p>
+    <p>Né le <strong>{{ epouxDateNaissanceLettres }}</strong> à <strong>{{ epouxLieuNaissance }}</strong></p>
+    <p>Fils de <strong>{{ epouxNomPere }}</strong></p>
+    <p>Et de <strong>{{ epouxNomMere }}</strong></p>
+  </div>
+
+  <div class="partie">
+    <p>D'une part, et <span class="identite">{{ epousePrenoms }} {{ epouseNomFamille }}</span></p>
+    <p>Profession <strong>{{ epouseProfession }}</strong>, domiciliée à <strong>{{ epouseDomicile }}</strong></p>
+    <p>Née le <strong>{{ epouseDateNaissanceLettres }}</strong> à <strong>{{ epouseLieuNaissance }}</strong></p>
+    <p>Fille de <strong>{{ epouseNomPere }}</strong></p>
+    <p>Et de <strong>{{ epouseNomMere }}</strong>. D'autre part</p>
+  </div>
+
+  <p>Ont contracté mariage entre eux selon la coutume</p>
+  <p><strong>{{ dateCelebrationLettres }}</strong> à <strong>{{ lieuCelebration }}</strong></p>
+
+  <div class="options">
+    <div>Option souscrite : <strong>{{ option_lettres }}</strong></div>
+    <div><strong>{{ regime_lettres }}</strong></div>
+  </div>
+
+  <p>Et que ce mariage a été enregistré par nous sur leur demande le</p>
+  <p><strong>{{ dateEnregistrementLettres }}</strong> à <strong>{{ lieuEnregistrement }}</strong></p>
+
+  <div class="pied">
+    <p>En foi de quoi nous avons délivré le présent certificat pour servir et valoir ce que de droit.</p>
+    <div class="signature">
+      <p>L'Officier de l'État Civil</p>
+      <p><strong>{{ officierEtatCivil }}</strong></p>
+      <p>Fait à {{ lieuDelivrance }}, le {{ dateDelivrance }}</p>
+      {% if tampon %}
+      <img class="tampon" src="{{ tampon }}" alt="Tampon numérique de la mairie">
+      {% endif %}
+    </div>
+  </div>
+
+  {% if notesMentionsMarginales %}
+  <p class="mentions">Mentions marginales : {{ notesMentionsMarginales }}</p>
+  {% endif %}
+
+</body>
+</html>

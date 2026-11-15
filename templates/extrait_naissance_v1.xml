@@ -44,7 +44,10 @@
   que le consultant ne les saisit pas manuellement (Tâche C.3, source
   "manuel") — jamais devinés/fabriqués par ce template ou le moteur.
 -->
-<document type="extrait_naissance" version="1.0" xsd="extrait_naissance.xsd">
+<document type="extrait_naissance" version="1.0"
+          xsd="extrait_naissance.xsd"
+          racine="extraitNaissance"
+          espaceNoms="http://sunu-mairie.sn/schemas/extrait-naissance">
 
   <numeroActe source="formulaire.numeroActe" obligatoire="true"/>
 
@@ -69,7 +72,10 @@
   </informationsRegistre>
 
   <acteNaissance>
-    <dateNaissanceLettres source="formulaire.dateNaissanceLettres" obligatoire="true"/>
+    <!-- Écrite automatiquement depuis la date du dialogue (services/dates_en_lettres.py).
+         La saisie du consultant passe AVANT : s'il recopie la mention du registre
+         papier, c'est la sienne qui sort. -->
+    <dateNaissanceLettres source="formulaire.dateNaissanceLettres|lettres.dossier.date_naissance_enfant" obligatoire="true"/>
     <dateNaissance source="dossier.date_naissance_enfant" format="aaaa-mm-jj" obligatoire="true"/>
     <heureNaissance source="formulaire.heureNaissance" obligatoire="false"/>
     <lieuNaissance source="dossier.commune_naissance" obligatoire="true"/>

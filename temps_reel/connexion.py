@@ -23,6 +23,7 @@ import asyncio
 import json
 import time
 import uuid
+from contextlib import contextmanager
 from typing import Optional
 
 from fastapi import WebSocket, WebSocketDisconnect
@@ -39,6 +40,43 @@ from temps_reel.registre import registre as registre_global
 from temps_reel.sessions import ErreurPersistance, SessionEtrangere, magasin as magasin_global
 
 log = obtenir_logger("connexion")
+
+
+class ChronoTour:
+    """
+    Durée de chaque segment d'un tour, résumée en une ligne de journal.
+
+    Pourquoi : rien côté serveur ne disait où partait le temps d'un tour. Vu du
+    client, on ne mesure que l'écart entre deux messages — or entre la fin de
+    la réflexion et l'envoi de `stream_fr` il y a deux allers-retours en base
+    qu'aucun message n'annonce. Une attente de 19 s a ainsi été attribuée à la
+    réflexion alors que rien ne permettait de le vérifier, et le signal `lent`
+    paraissait défaillant sans qu'on puisse le confirmer.
+
+    Les durées sont journalisées même quand le tour échoue : c'est justement
+    quand ça se passe mal qu'on veut savoir où ça a coincé.
+    """
+
+    def __init__(self, turn_id: Optional[str]) -> None:
+        self.turn_id = turn_id
+        self.segments: list[tuple[str, float]] = []
+        self._depart = time.monotonic()
+
+    @contextmanager
+    def segment(self, nom: str):
+        debut = time.monotonic()
+        try:
+            yield
+        finally:
+            self.segments.append((nom, time.monotonic() - debut))
+
+    def journaliser(self) -> None:
+        detail = " ".join(f"{nom}={duree:.2f}s" for nom, duree in self.segments)
+        log.info(
+            "tour.duree turn=%s total=%.2fs %s",
+            self.turn_id, time.monotonic() - self._depart, detail,
+        )
+
 
 PROTOCOLE_V1 = 1
 PROTOCOLE_V2 = 2
@@ -379,16 +417,30 @@ class Connexion:
         etat = self.etat
         await self.envoyer_json({"type": "status", "state": "thinking", "turn_id": turn_id})
 
+        chrono = ChronoTour(turn_id)
+        try:
+            await self._traiter_tour_chronometre(genre, turn_id, contenu, etat, chrono)
+        finally:
+            chrono.journaliser()
+
+    async def _traiter_tour_chronometre(self, genre, turn_id, contenu, etat, chrono) -> None:
+        # L'attente du verrou est mesurée à part : un deuxième tour envoyé
+        # pendant qu'un premier travaille attend ici, et ce temps-là n'est
+        # imputable ni à l'ASR ni au modèle.
+        debut_verrou = time.monotonic()
         async with self.magasin.verrou(etat["id"]):
+            chrono.segments.append(("verrou", time.monotonic() - debut_verrou))
             if genre == "audio":
                 try:
-                    wav = await audio.preparer_pour_asr(contenu)
+                    with chrono.segment("conversion_audio"):
+                        wav = await audio.preparer_pour_asr(contenu)
                 except audio.ErreurAudio as exc:
                     await self._erreur(exc.code, exc.message_fr, turn_id)
                     await self.envoyer_json({"type": "status", "state": "listening", "turn_id": turn_id})
                     return
                 await self.envoyer_json({"type": "etape", "turn_id": turn_id, "etape": "transcription"})
-                asr = await self._avec_signal_lenteur(transcribe_audio(wav), turn_id, "transcription")
+                with chrono.segment("transcription"):
+                    asr = await self._avec_signal_lenteur(transcribe_audio(wav), turn_id, "transcription")
                 texte = (asr.get("transcription") or "").strip() if asr.get("success") else ""
                 if not asr.get("success"):
                     await self._erreur("transcription_indisponible", "Je n'ai pas pu écouter votre message. Réessayez dans un instant.", turn_id)
@@ -404,9 +456,14 @@ class Connexion:
             await self.envoyer_json({"type": "transcription", "turn_id": turn_id, "texte": texte})
             await self.envoyer_json({"type": "etape", "turn_id": turn_id, "etape": "reflexion"})
             try:
-                resultat = await self._avec_signal_lenteur(
-                    asyncio.wait_for(moteur.traiter_message(etat, texte), DELAI_MAX_PHASE_COMPRENDRE), turn_id, "reflexion"
-                )
+                # C'EST CE SEGMENT, et lui seul, que le signal `lent` surveille.
+                # Le comparer à `persistance` et `parole` dans la même ligne de
+                # journal évite d'attribuer à la réflexion une lenteur qui vient
+                # d'ailleurs.
+                with chrono.segment("reflexion"):
+                    resultat = await self._avec_signal_lenteur(
+                        asyncio.wait_for(moteur.traiter_message(etat, texte), DELAI_MAX_PHASE_COMPRENDRE), turn_id, "reflexion"
+                    )
             except Exception as exc:  # noqa: BLE001
                 log.error("Moteur en échec (session=%s, erreur=%s)", etat["id"], type(exc).__name__)
                 await self.magasin.enregistrer(etat)
@@ -414,10 +471,25 @@ class Connexion:
                 await self.envoyer_json({"type": "status", "state": "listening", "turn_id": turn_id})
                 return
 
-            message_id = await self._enregistrer_messages(texte, resultat.reponse_fr)
-            await self.magasin.enregistrer(etat)
+            # Deux allers-retours en base, APRÈS la réflexion et AVANT que le
+            # client reçoive `stream_fr`. Ils n'étaient couverts par aucun
+            # signal : quand la base ralentit, le citoyen n'avait rien du tout,
+            # et la lenteur paraissait venir de la réflexion — ce qui a fait
+            # croire un moment que `lent` était en panne.
+            async def _persister():
+                identifiant = await self._enregistrer_messages(texte, resultat.reponse_fr)
+                await self.magasin.enregistrer(etat)
+                return identifiant
 
-        await self._emettre(resultat, turn_id=turn_id, message_id=message_id, question=texte)
+            with chrono.segment("persistance"):
+                message_id = await self._avec_signal_lenteur(
+                    _persister(), turn_id, "enregistrement"
+                )
+
+        # Traduction pulaar + synthèse vocale : le plus long, et le seul
+        # segment pendant lequel le citoyen a quelque chose à entendre.
+        with chrono.segment("parole"):
+            await self._emettre(resultat, turn_id=turn_id, message_id=message_id, question=texte)
 
     async def _enregistrer_messages(self, texte_citoyen: Optional[str], reponse_fr: str) -> Optional[str]:
         etat = self.etat
@@ -434,6 +506,10 @@ class Connexion:
         etat = self.etat
         if resultat.dossier_mis_a_jour:
             await self.envoyer_json({"type": "dossier_mis_a_jour", **resultat.dossier_mis_a_jour})
+        if resultat.progression:
+            # Envoyé AVANT la réponse : la barre avance pendant que le citoyen
+            # écoute, pas une phrase plus tard.
+            await self.envoyer_json({"type": "progression", **resultat.progression})
         if resultat.document_attendu:
             await self.envoyer_json({"type": "attente_upload", "document_type": resultat.document_attendu, "dossier_id": etat.get("dossier_id"), "turn_id": turn_id})
         await self.envoyer_json({"type": "stream_fr", "content": resultat.reponse_fr, "turn_id": turn_id, "message_id": message_id})

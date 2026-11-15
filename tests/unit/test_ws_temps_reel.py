@@ -168,6 +168,37 @@ def test_v2_tour_texte_complet(environnement):
     assert next(m for m in messages if m["type"] == "transcription")["texte"] == "Bonjour"
 
 
+def test_v2_l_avancement_est_pousse_avant_la_reponse(environnement):
+    # La barre doit avancer pendant que le citoyen écoute la phrase suivante,
+    # pas une phrase plus tard.
+    client, scenario, *_ = environnement
+    scenario["resultat"] = ResultatTour("Merci.", progression={"faites": 2, "total": 5})
+    with client.websocket_connect("/ws/v2") as ws:
+        ws.send_json({"type": "auth", "token": "jeton-a"})
+        _lire(ws, "status")
+        ws.send_json({"type": "texte", "texte": "Bonjour", "turn_id": "t1"})
+        messages = _lire(ws, "status", state="listening", turn_id="t1")
+
+    types = _types(messages)
+    assert types.index("progression") < types.index("stream_fr")
+    avancement = next(m for m in messages if m["type"] == "progression")
+    assert (avancement["faites"], avancement["total"]) == (2, 5)
+
+
+def test_v2_sans_avancement_rien_n_est_pousse(environnement):
+    # En mode information, il n'y a pas de démarche en cours : envoyer une
+    # barre ferait croire à un dossier ouvert.
+    client, scenario, *_ = environnement
+    scenario["resultat"] = ResultatTour("Voici ce qu'il faut savoir.")
+    with client.websocket_connect("/ws/v2") as ws:
+        ws.send_json({"type": "auth", "token": "jeton-a"})
+        _lire(ws, "status")
+        ws.send_json({"type": "texte", "texte": "Bonjour", "turn_id": "t1"})
+        messages = _lire(ws, "status", state="listening", turn_id="t1")
+
+    assert "progression" not in _types(messages)
+
+
 def test_v1_tour_audio_accuse_et_transcription(environnement):
     client, scenario, *_ = environnement
     with client.websocket_connect("/ws/cle-app?token=jeton-a") as ws:

@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  certificat_mariage_v1.xml — étape 5.5 du plan maître.
+
+  TEMPLATE de génération, PAS un document final : chaque feuille porte un
+  attribut source="..." que document_generator.py résout contre le dossier
+  pour produire une instance conforme à certificat_mariage.xsd. Ce fichier-ci
+  échouerait la validation XSD tel quel — c'est attendu, ce n'est pas son rôle.
+
+  Espace de noms des sources, identique à extrait_naissance_v1.xml :
+    dossier.<slot>      -> dossiers.slots[<slot>]  (rempli par le dialogue vocal)
+    commune.<champ>     -> ligne `communes` liée à dossiers.commune_id
+    formulaire.<champ>  -> document_formulaires.champs[nom=<champ>].valeur
+    systeme.<champ>     -> horodatage technique (date de génération)
+
+  ATTRIBUT `cle` : le certificat décrit le mari et l'épouse avec les MÊMES
+  noms d'éléments (`prenoms`, `nomFamille`, ...), comme l'exige le XSD. Sans
+  distinction, la seconde personne écraserait la première dans le dictionnaire
+  de valeurs — l'épouse hériterait du nom du mari, en silence. `cle` donne donc
+  à chaque feuille un nom unique côté résolution ; le nom de l'élément, lui,
+  reste celui du XSD.
+
+  CE QUE LE CONSULTANT SAISIT À LA MAIN (source="formulaire.*") : le numéro et
+  l'année du registre, et toutes les dates « en toutes lettres ». Même règle
+  que pour l'extrait de naissance, et pour la même raison : convertir
+  2020-09-11 en « Onze Septembre l'an deux mille vingt » automatiquement
+  demande une conversion en français qu'on ne peut pas improviser sans risque
+  sur un acte d'état civil. Le consultant a le registre sous les yeux.
+
+  CE QUI N'EST PAS ICI : les deux témoins et leurs pièces d'identité. Le
+  dialogue les collecte (migration 027), le modèle réel ne les imprime pas.
+  Voir l'explication en tête de certificat_mariage.xsd.
+-->
+<document type="constatation_mariage" version="1.0"
+          xsd="certificat_mariage.xsd"
+          racine="certificatMariageConstate"
+          espaceNoms="http://sunu-mairie.sn/schemas/certificat-mariage">
+
+  <enTeteAdministratif>
+    <region source="commune.region" obligatoire="true"/>
+    <departement source="commune.departement" obligatoire="true"/>
+    <arrondissement source="commune.arrondissement" obligatoire="false"/>
+    <collectiviteLocale source="commune.nom" obligatoire="true"/>
+    <!-- « CENTRE SECONDAIRE » sur le modèle réel ; vide dans un centre principal. -->
+    <typeCentre source="formulaire.typeCentre" obligatoire="false"/>
+    <nomCentreEtatCivil source="commune.nom" obligatoire="true"/>
+  </enTeteAdministratif>
+
+  <informationsRegistre>
+    <numeroRegistreChiffres source="formulaire.numeroRegistreChiffres" obligatoire="true"/>
+    <anneeRegistreLettres source="formulaire.anneeRegistreLettres" obligatoire="true"/>
+    <moisRegistreLettres source="formulaire.moisRegistreLettres" obligatoire="true"/>
+    <heureRegistreLettres source="formulaire.heureRegistreLettres" obligatoire="false"/>
+    <minuteRegistreLettres source="formulaire.minuteRegistreLettres" obligatoire="false"/>
+  </informationsRegistre>
+
+  <epoux>
+    <prenoms cle="epouxPrenoms" source="dossier.prenoms_epoux" obligatoire="true"/>
+    <nomFamille cle="epouxNomFamille" source="dossier.nom_epoux" obligatoire="true"/>
+    <profession cle="epouxProfession" source="dossier.profession_epoux" obligatoire="true"/>
+    <domicile cle="epouxDomicile" source="dossier.domicile_epoux" obligatoire="true"/>
+    <dateNaissanceLettres cle="epouxDateNaissanceLettres" source="formulaire.dateNaissanceEpouxLettres|lettres.dossier.date_naissance_epoux" obligatoire="true"/>
+    <dateNaissance cle="epouxDateNaissance" source="dossier.date_naissance_epoux" format="aaaa-mm-jj" obligatoire="true"/>
+    <lieuNaissance cle="epouxLieuNaissance" source="dossier.lieu_naissance_epoux" obligatoire="true"/>
+    <!-- Nom complet, non scindé : « Fils de RAYMOND ONWUKA » sur le modèle. -->
+    <nomPere cle="epouxNomPere" source="dossier.nom_pere_epoux" obligatoire="true"/>
+    <nomMere cle="epouxNomMere" source="dossier.nom_mere_epoux" obligatoire="true"/>
+  </epoux>
+
+  <epouse>
+    <prenoms cle="epousePrenoms" source="dossier.prenoms_epouse" obligatoire="true"/>
+    <nomFamille cle="epouseNomFamille" source="dossier.nom_epouse" obligatoire="true"/>
+    <profession cle="epouseProfession" source="dossier.profession_epouse" obligatoire="true"/>
+    <domicile cle="epouseDomicile" source="dossier.domicile_epouse" obligatoire="true"/>
+    <dateNaissanceLettres cle="epouseDateNaissanceLettres" source="formulaire.dateNaissanceEpouseLettres|lettres.dossier.date_naissance_epouse" obligatoire="true"/>
+    <dateNaissance cle="epouseDateNaissance" source="dossier.date_naissance_epouse" format="aaaa-mm-jj" obligatoire="true"/>
+    <lieuNaissance cle="epouseLieuNaissance" source="dossier.lieu_naissance_epouse" obligatoire="true"/>
+    <nomPere cle="epouseNomPere" source="dossier.nom_pere_epouse" obligatoire="true"/>
+    <nomMere cle="epouseNomMere" source="dossier.nom_mere_epouse" obligatoire="true"/>
+  </epouse>
+
+  <mariage>
+    <dateCelebrationLettres source="formulaire.dateCelebrationLettres|lettres.dossier.date_celebration" obligatoire="true"/>
+    <dateCelebration source="dossier.date_celebration" format="aaaa-mm-jj" obligatoire="true"/>
+    <lieuCelebration source="dossier.lieu_celebration" obligatoire="true"/>
+    <optionMatrimoniale source="dossier.option_matrimoniale" obligatoire="true"/>
+    <regimeMatrimonial source="dossier.regime_matrimonial" obligatoire="true"/>
+    <!-- L'enregistrement peut être postérieur à la cérémonie : jamais déduit
+         de la date de célébration, saisi depuis le registre. -->
+    <dateEnregistrementLettres source="formulaire.dateEnregistrementLettres" obligatoire="true"/>
+    <lieuEnregistrement source="commune.nom" obligatoire="true"/>
+  </mariage>
+
+  <delivrance>
+    <lieuDelivrance source="commune.nom" obligatoire="true"/>
+    <dateDelivrance source="systeme.date_generation" format="aaaa-mm-jj" obligatoire="true"/>
+    <officierEtatCivil source="formulaire.officierEtatCivil" obligatoire="true"/>
+    <notesMentionsMarginales source="formulaire.notesMentionsMarginales" obligatoire="false"/>
+  </delivrance>
+
+</document>

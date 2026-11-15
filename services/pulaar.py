@@ -41,6 +41,8 @@ import re
 from dataclasses import dataclass
 from typing import Literal
 
+from services import pulaar_nombres
+
 Statut = Literal["valide", "a_valider"]
 Source = Literal["corpus", "proposition"]
 
@@ -71,87 +73,87 @@ class Terme:
 # pour que « acte de naissance » l'emporte sur « acte ».
 TERMES: tuple[Terme, ...] = (
     # ---------- Lieux et institutions ----------
-    Terme("mairie", "meeri", "meeri", note="le corpus garde « mairie » ou écrit « maayri » — "
+    Terme("mairie", "meeri", "meeri", statut=VALIDE, note="le corpus garde « mairie » ou écrit « maayri » — "
           "écriture retenue ici : « meeri », trop proche de « maayde » (décès) autrement"),
-    Terme("commune", "komin", "komin", source=CORPUS, occurrences=24),
-    Terme("état civil", "etaa siwil", "etaa siwil", note="corpus : « état civil » gardé en français"),
-    Terme("centre d'état civil", "santar etaa siwil", "santar etaa siwil", source=CORPUS, occurrences=30),
-    Terme("arrondissement", "arondismaa", "arondismaa"),
-    Terme("tribunal", "ñaawirdu", None, source=CORPUS, occurrences=36),
-    Terme("hôpital", "opitaal", "opitaal", source=CORPUS, occurrences=32),
-    Terme("école", "duɗal", None, source=CORPUS, occurrences=91),
-    Terme("quartier", "leegal", None, source=CORPUS, occurrences=60),
-    Terme("chef de quartier", "mawɗo leegal", None, source=CORPUS, occurrences=60,
+    Terme("commune", "komin", "komin", statut=VALIDE, source=CORPUS, occurrences=24),
+    Terme("état civil", "etaa siwil", "etaa siwil",statut=VALIDE, note="corpus : « état civil » gardé en français"),
+    Terme("centre d'état civil", "santar etaa siwil", "santar etaa siwil", statut=VALIDE, source=CORPUS, occurrences=30),
+    Terme("arrondissement", "arondismaa", "arondismaa", statut=VALIDE),
+    Terme("tribunal", "ñaawirdu", None, statut=VALIDE, source=CORPUS, occurrences=36),
+    Terme("hôpital", "opitaal", "opitaal", statut=VALIDE, source=CORPUS, occurrences=32),
+    Terme("école", "ékole", None, statut=VALIDE, source=CORPUS, occurrences=91),
+    Terme("quartier", "leegal", None, statut=VALIDE, source=CORPUS, occurrences=60),
+    Terme("chef de quartier", "mawɗo leegal", None, statut=VALIDE, source=CORPUS, occurrences=60,
           note="variante du corpus : « jooma saare »"),
-    Terme("bureau", "biroo", "biroo"),
+    Terme("bureau", "biroo", "biroo", statut=VALIDE),
 
     # ---------- Pièces et documents ----------
-    Terme("acte de naissance", "deftere wulngo", "akte de nesaas", source=CORPUS, occurrences=92,
+    Terme("acte de naissance", "deftere wulngo", "akte de nesaas", statut=VALIDE, source=CORPUS, occurrences=92,
           note="variante écartée : « kaayit jibinannde »"),
     Terme(
         "extrait de naissance",
         "deftere wulngo",
-        "ekstere de nesaas",
+        "ekstere de nesaas", statut=VALIDE,
         source=CORPUS,
         occurrences=84,
         note="le corpus ne distingue pas l'extrait de l'acte ; si la mairie les distingue, "
         "il faudra deux termes",
     ),
-    Terme("acte de décès", "deftere maayde", "akte de desee", source=CORPUS, occurrences=72),
-    Terme("acte de mariage", "deftere dewgal", "akte de mariyaas", source=CORPUS, occurrences=44,
+    Terme("acte de décès", "deftere maayde", "akte de desee", statut=VALIDE, source=CORPUS, occurrences=72),
+    Terme("acte de mariage", "deftere dewgal", "akte de mariyaas", statut=VALIDE, source=CORPUS, occurrences=44,
           note="corpus : « acte de mariage » souvent gardé en français"),
-    Terme("certificat", "sertifika", "sertifika", source=CORPUS, occurrences=127),
-    Terme("certificat de naissance", "sertifika jibineede", "sertifika de nesaas"),
-    Terme("certificat de mariage", "sertifika dewgal", "sertifika de mariyaas"),
-    Terme("certificat de décès", "sertifika maayde", "sertifika de desee"),
-    Terme("certificat médical", "sertifika doktoor", "sertifika medikal"),
-    Terme("certificat de résidence", "sertifika hoɗorde", "sertifika hoɗorde", source=CORPUS, occurrences=72),
-    Terme("certificat de vie", "sertifika wuurgol", "sertifika wuurgol", source=CORPUS, occurrences=72),
-    Terme("certificat d'indigence", "sertifika talla", "sertifika talla", source=CORPUS, occurrences=96),
-    Terme("certificat de déménagement", "sertifika dille", "sertifika dille", source=CORPUS, occurrences=54),
-    Terme("certificat de célibat", "sertifika resaani", "sertifika de selibaa",
+    Terme("certificat", "sertifika", "sertifika", statut=VALIDE, source=CORPUS, occurrences=127),
+    Terme("certificat de naissance", "sertifika jibineede", "sertifika de nesaas", statut=VALIDE),
+    Terme("certificat de mariage", "sertifika dewgal", "sertifika de mariyaas", statut=VALIDE),
+    Terme("certificat de décès", "sertifika maayde", "sertifika de desee", statut=VALIDE),
+    Terme("certificat médical", "sertifika doktoor", "sertifika medikal",statut=VALIDE),
+    Terme("certificat de résidence", "sertifika hoɗorde", "sertifika hoɗorde", statut=VALIDE, source=CORPUS, occurrences=72),
+    Terme("certificat de vie", "sertifika wuurgol", "sertifika wuurgol", statut=VALIDE, source=CORPUS, occurrences=72),
+    Terme("certificat d'indigence", "sertifika talla", "sertifika talla", statut=VALIDE, source=CORPUS, occurrences=96),
+    Terme("certificat de déménagement", "sertifika dille", "sertifika dille", statut=VALIDE, source=CORPUS, occurrences=54),
+    Terme("certificat de célibat", "sertifika resaani", "sertifika de selibaa", statut=VALIDE,
           note="corpus : « célibat » gardé en français ; « a resaani » = « tu n'es pas marié »"),
-    Terme("livret de famille", "deftere ɓesngu", "liwure de famiy", source=CORPUS, occurrences=44,
+    Terme("livret de famille", "deftere ɓesngu", "liwure de famiy", statut=VALIDE, source=CORPUS, occurrences=44,
           note="corpus : « livret de famille » aussi gardé en français"),
-    Terme("bulletin scolaire", "deftere janngirdu", None, source=CORPUS, occurrences=18),
-    Terme("permis de construire", "permis de construire", "permi de konstiruwiir", source=CORPUS,
+    Terme("bulletin scolaire", "deftere janngirdu", None, statut=VALIDE, source=CORPUS, occurrences=18),
+    Terme("permis de construire", "permis de construire", "permi de konstiruwiir", statut=VALIDE, source=CORPUS,
           occurrences=100, note="corpus : toujours gardé en français"),
-    Terme("autorisation", "yamiroore", None, source=CORPUS, occurrences=96),
-    Terme("jugement", "ñaawoore", "juusmaa", note="corpus : « jugement » gardé en français"),
-    Terme("pièce d'identité", "kaayit ganndinirgal", "pyees didaŋtite",
+    Terme("autorisation", "yamiroore", None, statut=VALIDE, source=CORPUS, occurrences=96),
+    Terme("jugement", "ñaawoore", "juusmaa", statut=VALIDE, note="corpus : « jugement » gardé en français"),
+    Terme("pièce d'identité", "kaayit ganndinirgal", "pyees didaŋtite", statut=VALIDE,
           note="corpus : gardé en français, ou « jaaynirɗe » (les papiers)"),
-    Terme("carte d'identité", "seedee ngenndiijo", "karte didaŋtite", source=CORPUS, occurrences=12,
+    Terme("carte d'identité", "seedee ngenndiijo", "karte didaŋtite", statut=VALIDE, source=CORPUS, occurrences=12,
           note="littéralement « preuve nationale » — peu attesté, à confirmer"),
-    Terme("photocopie", "fotokopi", "fotokopi", source=CORPUS, occurrences=66),
-    Terme("copie certifiée conforme", "fotokopi laamu", "fotokopi laamu", source=CORPUS, occurrences=60),
-    Terme("original", "asli", None, source=CORPUS, occurrences=30),
-    Terme("légalisation", "muɗɗugol", "legalisasyoŋ", note="corpus : « légalisation » gardé en français"),
-    Terme("signature", "siif", None, source=CORPUS, occurrences=24),
-    Terme("timbre", "tembere", "tembere", source=CORPUS, occurrences=30),
-    Terme("dossier", "dosiye", "dosiye"),
-    Terme("papier", "deftere", None, source=CORPUS, occurrences=175),
-    Terme("document", "deftere", None, source=CORPUS, occurrences=157),
-    Terme("photo", "fotoo", "fotoo"),
-    Terme("numéro", "limoore", "nimeroo", source=CORPUS, occurrences=54),
-    Terme("plan", "plan", "plaŋ", source=CORPUS, occurrences=98),
+    Terme("photocopie", "fotokopi", "fotokopi", statut=VALIDE, source=CORPUS, occurrences=66),
+    Terme("copie certifiée conforme", "fotokopi laamu", "fotokopi laamu", statut=VALIDE, source=CORPUS, occurrences=60),
+    Terme("original", "original", None, source=CORPUS, occurrences=30,statut=VALIDE, note="corpus : gardé en français"),
+    Terme("légalisation", "muɗɗugol", "legalisasyoŋ", statut=VALIDE, note="corpus : « légalisation » gardé en français"),
+    Terme("signature", "siif", None, statut=VALIDE, source=CORPUS, occurrences=24),
+    Terme("timbre", "tembere", "tembere", statut=VALIDE, source=CORPUS, occurrences=30),
+    Terme("dossier", "dosiye", "dosiye", statut=VALIDE),
+    Terme("papier", "deftere", None, statut=VALIDE, source=CORPUS, occurrences=175),
+    Terme("document", "deftere", None, statut=VALIDE, source=CORPUS, occurrences=157),
+    Terme("photo", "fotoo", "fotoo", statut=VALIDE),
+    Terme("numéro", "limoore", "nimeroo", statut=VALIDE, source=CORPUS, occurrences=54),
+    Terme("plan", "plan", "plaŋ", statut=VALIDE, source=CORPUS, occurrences=98),
 
     # ---------- Actes de la vie civile ----------
     # `prononciation` renseignée même quand le mot pulaar existe : si le modèle
     # laisse échapper le mot français, la synthèse doit quand même le dire.
-    Terme("naissance", "wulngo", "nesaas", source=CORPUS, occurrences=290),
-    Terme("né", "jibinaa", None, source=CORPUS, occurrences=30),
-    Terme("date de naissance", "ñalnde jibineede", None, source=CORPUS, occurrences=12),
-    Terme("mariage", "dewgal", "mariyaas", source=CORPUS, occurrences=114),
-    Terme("marié", "resii", None, source=CORPUS, occurrences=36, note="« a resaani » = « tu n'es pas marié »"),
-    Terme("divorce", "ceergal", "diwors", source=CORPUS, occurrences=30),
-    Terme("décès", "maayde", "desee", source=CORPUS, occurrences=105),
-    Terme("déclaration", "winnditaare", None, source=CORPUS, occurrences=108,
+    Terme("naissance", "wulngo", "nesaas", statut=VALIDE, source=CORPUS, occurrences=290),
+    Terme("né", "jibinaa", None, statut=VALIDE, source=CORPUS, occurrences=30),
+    Terme("date de naissance", "ñalnde jibineede", None, statut=VALIDE, source=CORPUS, occurrences=12),
+    Terme("mariage", "dewgal", "mariyaas", statut=VALIDE, source=CORPUS, occurrences=114),
+    Terme("marié", "resii", None, statut=VALIDE, source=CORPUS, occurrences=36, note="« a resaani » = « tu n'es pas marié »"),
+    Terme("divorce", "ceergal", "diwors", statut=VALIDE, source=CORPUS, occurrences=30),
+    Terme("décès", "maayde", "desee", statut=VALIDE, source=CORPUS, occurrences=105),
+    Terme("déclaration", "winnditaare", None, statut=VALIDE, source=CORPUS, occurrences=108,
           note="même mot que l'enregistrement au registre"),
-    Terme("enregistrement", "winnditaare", None, source=CORPUS, occurrences=42),
-    Terme("demande", "ɗaɓɓoore", None, source=CORPUS, occurrences=121, note="verbe : « ɗaɓɓude »"),
-    Terme("témoin", "seede", None, source=CORPUS, occurrences=42, note="pluriel : seedeeɓe"),
-    Terme("héritage", "ndonu", None, source=CORPUS, occurrences=18),
-    Terme("démarche", "golle", None, note="littéralement « les travaux », le mot usuel"),
+    Terme("enregistrement", "winnditaare", None, statut=VALIDE, source=CORPUS, occurrences=42),
+    Terme("demande", "ɗaɓɓoore", None, statut=VALIDE, source=CORPUS, occurrences=121, note="verbe : « ɗaɓɓude »"),
+    Terme("témoin", "seede", None, statut=VALIDE, source=CORPUS, occurrences=42, note="pluriel : seedeeɓe"),
+    Terme("héritage", "ndonu", None, statut=VALIDE, source=CORPUS, occurrences=18),
+    Terme("démarche", "golle", None, statut=VALIDE, note="littéralement « les travaux », le mot usuel"),
 
     # ---------- Personnes ----------
     Terme("nom", "innde", None, statut=VALIDE, source=CORPUS, occurrences=92),
@@ -161,28 +163,28 @@ TERMES: tuple[Terme, ...] = (
     Terme("famille", "ɓesngu", None, statut=VALIDE, source=CORPUS, occurrences=90),
     Terme("époux", "gorko", None, statut=VALIDE, note="litt. « homme »"),
     Terme("épouse", "debbo", None, statut=VALIDE, source=CORPUS, occurrences=42, note="litt. « femme »"),
-    Terme("défunt", "maayɗo", None, source=CORPUS, occurrences=60),
-    Terme("maire", "jooma meeri", "jooma meeri", source=CORPUS, occurrences=16),
+    Terme("défunt", "maayɗo", None, statut=VALIDE, source=CORPUS, occurrences=60),
+    Terme("maire", "jooma meeri", "jooma meeri", statut=VALIDE, source=CORPUS, occurrences=16),
 
     # ---------- Lieux de vie, biens ----------
-    Terme("maison", "galle", None, source=CORPUS, occurrences=82),
-    Terme("terrain", "leydi", None, source=CORPUS, occurrences=63),
-    Terme("construction", "mahdi", None, source=CORPUS, occurrences=60),
-    Terme("résidence", "hoɗorde", None, source=CORPUS, occurrences=102),
+    Terme("maison", "galle", None, statut=VALIDE, source=CORPUS, occurrences=82),
+    Terme("terrain", "leydi", None, statut=VALIDE, source=CORPUS, occurrences=63),
+    Terme("construction", "mahdi", None, statut=VALIDE, source=CORPUS, occurrences=60),
+    Terme("résidence", "hoɗorde", None, statut=VALIDE, source=CORPUS, occurrences=102),
 
     # ---------- Argent ----------
-    Terme("franc CFA", "faraŋ seefaa", "faraŋ seefaa"),
-    Terme("francs", "faraŋ", "faraŋ"),
-    Terme("argent", "kaalis", None, source=CORPUS, occurrences=135),
-    Terme("payer", "yoɓde", None, source=CORPUS, occurrences=117),
-    Terme("impôts", "njaartu", None, source=CORPUS, occurrences=42),
-    Terme("budget", "budget", "budsee", source=CORPUS, occurrences=102, note="corpus : gardé en français"),
+    Terme("franc CFA", "faraŋ seefaa", "faraŋ seefaa", statut=VALIDE, source=CORPUS, occurrences=120),
+    Terme("francs", "faraŋ", "faraŋ", statut=VALIDE),
+    Terme("argent", "kaalis", None, statut=VALIDE, source=CORPUS, occurrences=135),
+    Terme("payer", "yoɓde", None, statut=VALIDE, source=CORPUS, occurrences=117),
+    Terme("impôts", "njaartu", None, statut=VALIDE, source=CORPUS, occurrences=42),
+    Terme("budget", "budget", "budsee", statut=VALIDE, source=CORPUS, occurrences=102, note="corpus : gardé en français"),
 
     # ---------- Temps ----------
     Terme("aujourd'hui", "hannde", None, statut=VALIDE, source=CORPUS, occurrences=165),
     Terme("demain", "janngo", None, statut=VALIDE, source=CORPUS, occurrences=37),
     Terme("jours", "balɗe", None, statut=VALIDE, source=CORPUS, occurrences=128),
-    Terme("semaine", "yontere", None, source=CORPUS, occurrences=19),
+    Terme("semaine", "yontere", None, statut=VALIDE, source=CORPUS, occurrences=19),
     Terme("mois", "lewru", None, statut=VALIDE, source=CORPUS, occurrences=58, note="pluriel : lebbi"),
     Terme("année", "hitaande", None, statut=VALIDE, source=CORPUS, occurrences=180),
 )
@@ -227,3 +229,69 @@ def orthographe_tts(texte: str) -> str:
     for motif, remplacement in _SUBSTITUTIONS:
         texte = motif.sub(remplacement, texte)
     return texte
+
+# ---------------------------------------------------------------------------
+# Caractères que le modèle vocal ne connaît pas
+# ---------------------------------------------------------------------------
+#
+# Le vocabulaire de `rnjema-unima/mms-tts-pul-baseline` compte 41 entrées :
+#
+#     ' ' ' 0..9 a b c d e f g h i j k l m n o p r s t u w y | ŋ ƴ ɓ ɗ ‐ —
+#
+# Tout caractère absent est SILENCIEUSEMENT SUPPRIMÉ par le tokeniseur — pas
+# de `<unk>`, pas d'erreur. Mesuré : « ñalnde jeeɗiɗi » donne 27 jetons,
+# « nalnde jeedidi » en donne 29 ; le « ñ » n'en produit aucun.
+#
+# C'est grave ici parce que « ñ » est dans « ñalnde » (jour) et « ñalawma »,
+# donc dans CHAQUE date énoncée par `pulaar_nombres.date_pulaar` : sans cette
+# table, la correction des nombres resterait à moitié inaudible.
+#
+# ⚠️ Ne couvre volontairement QUE ce que le code pulaar produit lui-même. Les
+# voyelles accentuées du français (« à », « é »…) et les lettres q, v, x, z
+# manquent aussi au vocabulaire et sont donc muettes elles aussi — mais les
+# remplacer relève du glossaire (`TERMES` ci-dessus), terme par terme et relu,
+# pas d'une table de correspondance devinée.
+CARACTERES_ABSENTS: tuple[tuple[str, str], ...] = (
+    # « ny » est l'autre graphie courante de la même nasale palatale en
+    # pulaar : ce n'est pas une approximation, c'est la même lettre écrite
+    # autrement. « n » et « y » sont tous deux dans le vocabulaire.
+    ("ñ", "ny"),
+    ("Ñ", "ny"),
+    # Le tiret ASCII est absent (le vocabulaire n'a que « ‐ » U+2010 et
+    # « — » U+2014) : un espace sépare au moins les deux mots, là où le tiret
+    # supprimé les collait.
+    ("-", " "),
+)
+
+_ESPACES = re.compile(r"\s{2,}")
+
+
+def caracteres_tts(texte: str) -> str:
+    """Remplace les caractères absents du vocabulaire du modèle vocal."""
+    for absent, remplacement in CARACTERES_ABSENTS:
+        texte = texte.replace(absent, remplacement)
+    return _ESPACES.sub(" ", texte).strip()
+
+
+def texte_pour_synthese(texte: str) -> str:
+    """
+    Le texte tel qu'il part RÉELLEMENT au modèle vocal.
+
+    Point d'entrée unique de la préparation : `tts_client.synthesize_remote`
+    l'applique avant l'envoi, et `services.catalogue_audio.cle_phrase` s'en
+    sert pour l'empreinte du cache. Les deux DOIVENT passer par ici, sinon le
+    fichier rangé sur le disque ne correspond plus à sa clé.
+
+    L'ordre des trois étapes n'est pas indifférent :
+
+    1. `enoncer_nombres` — les chiffres d'abord, parce qu'un montant se
+       reconnaît à son unité française (« 200 francs CFA »). Après
+       `orthographe_tts`, cette unité serait déjà devenue « faraŋ CFA » et la
+       règle produirait « teemedde ɗiɗi faraŋ seefaa CFA », avec un « CFA » en
+       trop.
+    2. `orthographe_tts` — les mots français restants.
+    3. `caracteres_tts` — en dernier, sur le texte définitif : les deux étapes
+       précédentes produisent elles-mêmes des caractères à corriger
+       (« ñalnde » vient de l'étape 1).
+    """
+    return caracteres_tts(orthographe_tts(pulaar_nombres.enoncer_nombres(texte or "")))

@@ -14,10 +14,15 @@
   pixel pour pixel : ce que le consultant doit pouvoir reconnaître et
   comparer à l'image source, pas reproduire au trait près.
 
-  RAPPEL LÉGAL (cf. roadmap §5.4) : ce document porte un bandeau "brouillon
-  officiel" — il n'a AUCUNE valeur légale par lui-même en V1. Ne jamais
-  retirer ce bandeau sans que le mécanisme de tampon numérique (V2) et sa
-  validation par une autorité compétente ne soient effectifs.
+  RAPPEL LÉGAL (§5.4) — DÉCISION DU PORTEUR DU PROJET, 2026-09-26 : le bandeau
+  « brouillon officiel » ne s'affiche que TANT QUE LE DOCUMENT N'EST PAS
+  TAMPONNÉ. La confirmation de l'administrateur suffit désormais à le faire
+  sauter : `communes.tampon_numerique_url` n'est écrit que par
+  `admin_repo.confirmer_tampon`, qui journalise d'abord QUI a autorisé ce
+  tampon et QUAND (table `tampon_confirmations`, migration 006). Un document
+  tamponné est donc un document qu'un administrateur identifié a autorisé.
+  Ne jamais poser de tampon par un autre chemin : ce serait délivrer un acte
+  d'apparence officielle sans trace de qui l'a permis.
 -->
 <!DOCTYPE html>
 <html lang="fr">
@@ -40,6 +45,16 @@
     background: #fdf3d0;
     border: 1px solid #c9a227;
     color: #6b4e00;
+    font-weight: bold;
+    font-size: 9.5pt;
+    padding: 4px 8px;
+    margin-bottom: 6mm;
+  }
+  .delivre {
+    text-align: center;
+    background: #eef6ee;
+    border: 1px solid #4a7c4a;
+    color: #2c4f2c;
     font-weight: bold;
     font-size: 9.5pt;
     padding: 4px 8px;
@@ -119,6 +134,12 @@
     font-size: 9pt;
   }
 
+  .tampon {
+    max-width: 38mm;
+    max-height: 38mm;
+    margin-top: 3mm;
+    opacity: 0.92;
+  }
   .bloc-erve {
     border: 1px solid #000;
     border-top: none;
@@ -139,10 +160,16 @@
 </head>
 <body>
 
+  {% if tampon %}
+  <div class="delivre">
+    DOCUMENT DÉLIVRÉ PAR LA MAIRIE — Suivi : {{ numero_suivi }}
+  </div>
+  {% else %}
   <div class="filigrane">
     DOCUMENT GÉNÉRÉ — BROUILLON OFFICIEL, À AUTHENTIFIER PAR L'OFFICIER D'ÉTAT CIVIL
     — Suivi : {{ numero_suivi }}
   </div>
+  {% endif %}
 
   <div class="entete">
     <div class="entete-gauche">
@@ -271,7 +298,8 @@
 
   <div class="bloc-pied">
     <div>(1)(2)(3) Notes et mentions marginales au verso{% if notesMentionsMarginales %} : {{ notesMentionsMarginales }}{% endif %}</div>
-    <div>Prénom et Nom : <strong>{{ officierEtatCivil }}</strong><br>Délivré à {{ lieuDelivrance }}, le {{ dateDelivrance }}</div>
+    <div>Prénom et Nom : <strong>{{ officierEtatCivil }}</strong><br>Délivré à {{ lieuDelivrance }}, le {{ dateDelivrance }}
+    {% if tampon %}<br><img class="tampon" src="{{ tampon }}" alt="Tampon numérique de la mairie">{% endif %}</div>
   </div>
 
   <div class="bloc-erve">

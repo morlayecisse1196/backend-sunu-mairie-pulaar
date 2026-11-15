@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           targetNamespace="http://sunu-mairie.sn/schemas/certificat-mariage"
+           xmlns:tns="http://sunu-mairie.sn/schemas/certificat-mariage"
+           elementFormDefault="qualified">
+
+  <xs:annotation>
+    <xs:documentation>
+      Schéma XML (XSD) d'un CERTIFICAT DE MARIAGE CONSTATÉ (République du
+      Sénégal) — étape 5.5 du plan maître.
+
+      Construit à partir d'un modèle réel fourni par le porteur du projet :
+      commune d'arrondissement de Fann - Point E - Amitié, centre secondaire
+      ex-Grand Dakar, registre n° 307, établi le 27/09/2020.
+
+      Ce que le modèle réel NE contient pas, et qui n'est donc pas ici : les
+      témoins. Le dialogue vocal les collecte (deux témoins et le numéro de
+      leur pièce d'identité, migration 027) parce que la constatation les
+      exige, mais ils n'apparaissent nulle part sur le certificat imprimé —
+      ils sont portés au registre. Leur inventer une place sur le document
+      serait une falsification de forme, pas une amélioration.
+
+      Les choix de forme non lisibles directement sur le modèle sont signalés
+      ci-dessous et doivent être confirmés par un officier d'état civil avant
+      toute mise en service (règle 3 du plan maître).
+    </xs:documentation>
+  </xs:annotation>
+
+  <!-- ===================== TYPES SIMPLES ===================== -->
+
+  <xs:simpleType name="TexteCourt">
+    <xs:annotation>
+      <xs:documentation>Prénoms, noms, professions, lieux — bornés à 100 caractères.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:minLength value="1"/>
+      <xs:maxLength value="100"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="TexteLong">
+    <xs:annotation>
+      <xs:documentation>Champs « en toutes lettres » (dates, année du registre) recopiés du registre papier.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:minLength value="1"/>
+      <xs:maxLength value="300"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="NumeroRegistre">
+    <xs:annotation>
+      <xs:documentation>« Registre N° 307 » sur le modèle réel : des chiffres, jamais fabriqués par l'application — le registre papier fait foi.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[0-9]{1,6}"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="OptionMatrimoniale">
+    <xs:annotation>
+      <xs:documentation>
+        « Option souscrite » du modèle réel, où figure « Monogamie ». Les quatre
+        valeurs sont celles que le dialogue vocal enregistre (migration 027),
+        conformément au Code de la famille : monogamie, ou polygamie limitée à
+        deux, trois ou quatre épouses.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="monogamie"/>
+      <xs:enumeration value="polygamie_2"/>
+      <xs:enumeration value="polygamie_3"/>
+      <xs:enumeration value="polygamie_4"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="RegimeMatrimonial">
+    <xs:annotation>
+      <xs:documentation>« Séparations des biens » sur le modèle réel ; les trois régimes reconnus.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="separation_des_biens"/>
+      <xs:enumeration value="communaute"/>
+      <xs:enumeration value="dotal"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- ===================== TYPES COMPLEXES ===================== -->
+
+  <xs:complexType name="EnTeteAdministratif">
+    <xs:annotation>
+      <xs:documentation>
+        Le bandeau supérieur gauche du modèle : région, ville, commune
+        d'arrondissement, type de centre. typeCentre vaut « CENTRE SECONDAIRE »
+        sur ce modèle ; il est absent dans un centre principal, d'où minOccurs=0.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:element name="region" type="tns:TexteCourt"/>
+      <xs:element name="departement" type="tns:TexteCourt"/>
+      <xs:element name="arrondissement" type="tns:TexteCourt" minOccurs="0"/>
+      <xs:element name="collectiviteLocale" type="tns:TexteCourt"/>
+      <xs:element name="typeCentre" type="tns:TexteCourt" minOccurs="0"/>
+      <xs:element name="nomCentreEtatCivil" type="tns:TexteCourt"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="InformationsRegistre">
+    <xs:annotation>
+      <xs:documentation>
+        « Registre N° 307 / L'an deux mille Vingt / Du mois de Septembre à
+        dix-sept heure(s) trente minute(s) ». L'heure est laissée vide sur
+        certains registres, d'où les deux minOccurs=0.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:element name="numeroRegistreChiffres" type="tns:NumeroRegistre"/>
+      <xs:element name="anneeRegistreLettres" type="tns:TexteLong"/>
+      <xs:element name="moisRegistreLettres" type="tns:TexteCourt"/>
+      <xs:element name="heureRegistreLettres" type="tns:TexteCourt" minOccurs="0"/>
+      <xs:element name="minuteRegistreLettres" type="tns:TexteCourt" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="Epoux">
+    <xs:annotation>
+      <xs:documentation>
+        Même structure pour le mari et pour l'épouse : le modèle réel les
+        présente en deux blocs identiques (« D'une part » / « D'autre part »).
+        Les parents sont donnés en nom complet, non scindé — c'est ainsi que le
+        certificat les imprime (« Fils de RAYMOND ONWUKA »), et c'est aussi
+        ainsi que le dialogue vocal les collecte.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:element name="prenoms" type="tns:TexteCourt"/>
+      <xs:element name="nomFamille" type="tns:TexteCourt"/>
+      <xs:element name="profession" type="tns:TexteCourt"/>
+      <xs:element name="domicile" type="tns:TexteCourt"/>
+      <xs:element name="dateNaissanceLettres" type="tns:TexteLong"/>
+      <xs:element name="dateNaissance" type="xs:date"/>
+      <xs:element name="lieuNaissance" type="tns:TexteCourt"/>
+      <xs:element name="nomPere" type="tns:TexteCourt"/>
+      <xs:element name="nomMere" type="tns:TexteCourt"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="Mariage">
+    <xs:annotation>
+      <xs:documentation>
+        « Ont contracté mariage entre eux selon la coutume ... Option souscrite
+        ... Et que ce mariage a été enregistré par nous sur leur demande le ...
+        à ... ». La date d'enregistrement peut être postérieure à la cérémonie :
+        les deux sont donc distinctes, jamais déduites l'une de l'autre.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:element name="dateCelebrationLettres" type="tns:TexteLong"/>
+      <xs:element name="dateCelebration" type="xs:date"/>
+      <xs:element name="lieuCelebration" type="tns:TexteCourt"/>
+      <xs:element name="optionMatrimoniale" type="tns:OptionMatrimoniale"/>
+      <xs:element name="regimeMatrimonial" type="tns:RegimeMatrimonial"/>
+      <xs:element name="dateEnregistrementLettres" type="tns:TexteLong"/>
+      <xs:element name="lieuEnregistrement" type="tns:TexteCourt"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="Delivrance">
+    <xs:sequence>
+      <xs:element name="lieuDelivrance" type="tns:TexteCourt"/>
+      <xs:element name="dateDelivrance" type="xs:date"/>
+      <xs:element name="officierEtatCivil" type="tns:TexteCourt"/>
+      <xs:element name="notesMentionsMarginales" type="tns:TexteLong" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- ===================== ÉLÉMENT RACINE ===================== -->
+
+  <xs:element name="certificatMariageConstate">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="enTeteAdministratif" type="tns:EnTeteAdministratif"/>
+        <xs:element name="informationsRegistre" type="tns:InformationsRegistre"/>
+        <xs:element name="epoux" type="tns:Epoux"/>
+        <xs:element name="epouse" type="tns:Epoux"/>
+        <xs:element name="mariage" type="tns:Mariage"/>
+        <xs:element name="delivrance" type="tns:Delivrance"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+</xs:schema>

@@ -6,7 +6,7 @@ import os
 import asyncio
 import httpx
 
-from services.pulaar import orthographe_tts
+from services.pulaar import texte_pour_synthese
 
 TTS_API_URL = os.getenv("TTS_API_URL", "https://morlayecis0003-tts-pulaar-docker.hf.space")
 TTS_API_KEY = os.getenv("TTS_API_KEY")  # optionnel — doit matcher le secret TTS_API_KEY du Space
@@ -33,15 +33,19 @@ async def synthesize_remote(text: str, timeout: float = TTS_TIMEOUT_SECONDS) -> 
     cold start du Space), comme transcribe_audio() dans asr_client.py.
 
     Point de passage UNIQUE vers le modèle vocal : c'est donc ici qu'est
-    appliquée l'orthographe de synthèse (`services.pulaar.orthographe_tts`).
-    `mms-tts-pul` est monolingue pulaar et écorche les mots français laissés
-    tels quels ; seul le texte *envoyé au modèle* est réécrit, jamais celui
-    affiché au citoyen ni celui enregistré en base.
+    appliquée la préparation du texte (`services.pulaar.texte_pour_synthese`).
+    `mms-tts-pul` est monolingue pulaar : il écorche les mots français laissés
+    tels quels, et il ne sait pas dire un chiffre — les dix caractères sont
+    dans son vocabulaire, mais pratiquement jamais vus à l'entraînement, si
+    bien que « 2026 » produit 0,21 s de bruit là où « ujunaaje ɗiɗi e noogas e
+    jeegom » en produit 3,09 s de parole. Les deux défauts se corrigent ici, et
+    seulement sur le texte *envoyé au modèle* : jamais sur celui affiché au
+    citoyen ni sur celui enregistré en base.
     """
     if not TTS_API_URL:
         raise TTSError("TTS_API_URL non défini dans .env")
 
-    text = orthographe_tts(text)
+    text = texte_pour_synthese(text)
 
     headers = {"Content-Type": "application/json"}
     if TTS_API_KEY:

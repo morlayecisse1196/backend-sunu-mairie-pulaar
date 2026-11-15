@@ -272,7 +272,21 @@ def enregistrer(
         colonne_audio = COLONNE_AUDIO.get(table, "audio")
         if colonne_audio:
             donnees.setdefault(colonne_audio, None)
-        client.table(table).update(donnees).eq(colonne_cle, valeur_cle).execute()
+        requete = client.table(table).update(donnees).eq(colonne_cle, valeur_cle)
+        # La clé d'une ligne n'est unique QUE dans sa démarche. « recapitulatif »
+        # existe dans les trois ; `nom_declarant`, `nom_temoin_1`,
+        # `livret_famille`, `cni_declarant_recto`… existent dans deux. Sans ce
+        # filtre, relire une phrase de l'extrait de naissance écrasait son
+        # homonyme dans la déclaration de décès ET la marquait relue — une
+        # traduction que personne n'avait lue, présentée comme validée, ce que
+        # tout le dispositif est censé rendre impossible.
+        #
+        # `phrases_systeme` est la seule table volontairement commune : ses
+        # phrases (« C'est noté. », « Je n'ai rien entendu. ») n'appartiennent à
+        # aucune démarche, et elle n'a pas de colonne `type_demarche`.
+        if table != "phrases_systeme":
+            requete = requete.eq("type_demarche", type_demarche)
+        requete.execute()
 
     _journaliser(retenues, connues, valider=valider, par=par, type_demarche=type_demarche)
     demarche.vider_cache()

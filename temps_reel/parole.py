@@ -29,6 +29,18 @@ SYNTHESES_PARALLELES = 2
 _FIN_DE_PHRASE = re.compile(r"[.!?…]+[\"»”)]*\s+")
 LONGUEUR_MIN_PHRASE = 12
 
+# Au-delà de ce délai sans un seul son, on le DIT. Même seuil que la phase
+# « comprendre » (DELAI_SIGNAL_LENTEUR dans temps_reel/connexion.py) : il n'y a
+# pas de raison qu'un silence soit tolérable plus longtemps ici qu'ailleurs.
+#
+# Pourquoi ce signal manquait, et pourquoi il compte le plus ici : `lent` ne
+# couvrait que la transcription et la réflexion. Or c'est CETTE phase qui est la
+# plus longue — mesuré sur ce projet, 25,3 s sur un tour de 32,4 s, dont une
+# douzaine de secondes avant le premier son. Un citoyen qui ne sait pas lire
+# n'avait donc aucun signe de vie pendant la partie la plus lente du tour : le
+# texte français affiché entre-temps ne lui sert à rien.
+DELAI_SIGNAL_LENTEUR_PAROLE = 6.0
+
 
 class Emetteur(Protocol):
     async def envoyer_json(self, message: dict) -> None: ...
@@ -132,6 +144,13 @@ async def dire(
         taches.append(tache)
         file_audio.put_nowait(tache)
 
+    async def veiller_lenteur() -> None:
+        """Dit « ça prend un peu de temps » si aucun son n'est encore parti."""
+        await asyncio.sleep(DELAI_SIGNAL_LENTEUR_PAROLE)
+        await emetteur.envoyer_json({"type": "lent", "turn_id": turn_id, "etape": "parole"})
+
+    tache_veille: Optional[asyncio.Task] = asyncio.create_task(veiller_lenteur())
+
     async def envoyeur() -> None:
         envoyees = 0
         while True:
@@ -147,6 +166,11 @@ async def dire(
                 })
                 continue
             if envoyees == 0:
+                # Le premier son part : la veille n'a plus d'objet. Annulée
+                # AVANT l'envoi, pour qu'un `lent` ne puisse pas se glisser
+                # juste après le début de la parole.
+                if tache_veille is not None and not tache_veille.done():
+                    tache_veille.cancel()
                 await emetteur.envoyer_json({"type": "status", "state": "speaking", "turn_id": turn_id})
             await emetteur.envoyer_octets(resultat)
             envoyees += 1
@@ -187,9 +211,14 @@ async def dire(
         await tache_envoi
         return pulaar
     finally:
+        # La veille est annulée aussi sur interruption : sans cela, un citoyen
+        # qui coupe la parole recevrait quelques secondes plus tard un « ça
+        # prend du temps » à propos d'une réponse déjà abandonnée.
+        if tache_veille is not None and not tache_veille.done():
+            tache_veille.cancel()
         if not tache_envoi.done():
             tache_envoi.cancel()
         for tache in taches:
             if not tache.done():
                 tache.cancel()
-        await asyncio.gather(tache_envoi, *taches, return_exceptions=True)
+        await asyncio.gather(tache_envoi, tache_veille, *taches, return_exceptions=True)

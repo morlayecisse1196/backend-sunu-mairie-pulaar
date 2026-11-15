@@ -21,7 +21,7 @@ from typing import Optional
 from prompts import SYSTEM_PROMPT_FORMATTER, build_narration_statut_dossier_prompt
 from services import llm
 from services.journal import obtenir_logger
-from services.pulaar import orthographe_tts
+from services.pulaar import texte_pour_synthese
 from tts_client import NARRATION_TIMEOUT_SECONDS, synthesize_remote
 
 log = obtenir_logger("catalogue_audio")
@@ -135,11 +135,14 @@ def cle_phrase(texte_pulaar: str) -> str:
     La clé du fichier audio d'un texte pulaar : son empreinte.
 
     L'empreinte porte sur le texte RÉELLEMENT ENVOYÉ au synthétiseur, c'est-à-
-    dire après `orthographe_tts`. Deux choses peuvent donc changer le son d'une
-    phrase, et toutes deux changent la clé : le relecteur corrige le pulaar, ou
-    un terme entre au glossaire et cesse d'être écorché. Faire porter
-    l'empreinte sur le seul texte de la base laisserait la seconde passer
-    inaperçue — l'audio dirait encore « ekstere de nesaas » longtemps après la
+    dire après `texte_pour_synthese` — la MÊME fonction que celle appliquée par
+    `tts_client.synthesize_remote`, et non une partie d'entre elle : sinon le
+    fichier rangé sur le disque ne correspondrait plus à sa clé. Trois choses
+    peuvent donc changer le son d'une phrase, et toutes trois changent la clé :
+    le relecteur corrige le pulaar, un terme entre au glossaire et cesse d'être
+    écorché, ou la façon d'énoncer les nombres évolue. Faire porter l'empreinte
+    sur le seul texte de la base laisserait les deux dernières passer
+    inaperçues — l'audio dirait encore « ekstere de nesaas » longtemps après la
     correction du glossaire.
 
     Volontairement SANS mise en minuscules, contrairement à `cle_pour_texte` :
@@ -147,7 +150,7 @@ def cle_phrase(texte_pulaar: str) -> str:
     une resynthèse. Mieux vaut resynthétiser pour rien que faire entendre un
     texte corrigé avec l'ancien son.
     """
-    dit = orthographe_tts((texte_pulaar or "").strip())
+    dit = texte_pour_synthese((texte_pulaar or "").strip())
     return "pul_" + hashlib.sha1(dit.encode("utf-8")).hexdigest()[:20]
 
 

@@ -20,7 +20,14 @@ import re
 import pytest
 
 from prompts import SYSTEM_PROMPT_FORMATTER
-from services.pulaar import CORPUS, TERMES, bloc_glossaire, orthographe_tts
+from services.pulaar import (
+    CORPUS,
+    TERMES,
+    bloc_glossaire,
+    caracteres_tts,
+    orthographe_tts,
+    texte_pour_synthese,
+)
 import tts_client
 
 
@@ -162,3 +169,71 @@ async def test_la_synthese_recoit_lorthographe_adaptee(monkeypatch):
     await tts_client.synthesize_remote("Aɗa soklii une pièce d'identité")
 
     assert envoyes == ["Aɗa soklii une pyees didaŋtite"]
+
+
+class TestCaracteresAbsentsDuModele:
+    """
+    Le vocabulaire de `rnjema-unima/mms-tts-pul-baseline` compte 41 entrées, et
+    tout caractère absent est SILENCIEUSEMENT SUPPRIMÉ par le tokeniseur — pas
+    de `<unk>`, pas d'erreur. Mesuré : « ñalnde jeeɗiɗi » donne 27 jetons,
+    « nalnde jeedidi » en donne 29.
+    """
+
+    def test_le_n_tilde_devient_ny(self):
+        # « ñ » est absent du vocabulaire, alors qu'il est dans « ñalnde »
+        # (jour) : donc dans CHAQUE date énoncée. Sans ce remplacement, la
+        # correction des nombres resterait à moitié inaudible.
+        assert caracteres_tts("ñalnde") == "nyalnde"
+        assert caracteres_tts("Ñalnde") == "nyalnde"
+
+    def test_le_tiret_ascii_devient_une_espace(self):
+        # Supprimé, il collait les deux mots ; le vocabulaire ne connaît que
+        # « ‐ » (U+2010) et « — » (U+2014).
+        assert caracteres_tts("pulaar-fulfulde") == "pulaar fulfulde"
+
+    def test_les_espaces_en_trop_sont_resorbes(self):
+        assert caracteres_tts("  deux   mots  ") == "deux mots"
+
+    def test_un_texte_deja_propre_n_est_pas_touche(self):
+        assert caracteres_tts("Aɗa jogii kaayit ganndinirgal maa") == (
+            "Aɗa jogii kaayit ganndinirgal maa"
+        )
+
+
+class TestTextePourSynthese:
+    """
+    La chaîne complète, et surtout l'ORDRE de ses trois étapes : c'est le seul
+    endroit qui voit ce qui part réellement au modèle vocal.
+    """
+
+    def test_les_chiffres_passent_avant_les_mots_francais(self):
+        # Si `orthographe_tts` passait d'abord, « 200 francs CFA » serait déjà
+        # devenu « 200 faraŋ CFA », et la règle du montant produirait
+        # « teemedde ɗiɗi faraŋ seefaa CFA » — l'unité dite deux fois.
+        assert texte_pour_synthese("Aɗa soklii 200 francs CFA.") == (
+            "Aɗa soklii teemedde ɗiɗi faraŋ seefaa."
+        )
+
+    def test_les_caracteres_passent_en_dernier(self):
+        # « ñalnde » est produit par l'étape des nombres : la correction des
+        # caractères doit donc venir après elle, pas avant.
+        assert "ñ" not in texte_pour_synthese("jibinaaɗo 2026-09-07")
+        assert texte_pour_synthese("jibinaaɗo 2026-09-07").startswith("jibinaaɗo nyalnde")
+
+    def test_les_mots_du_glossaire_sont_toujours_reecrits(self):
+        # La chaîne ne doit rien retirer à l'étape 1 du plan maître.
+        assert texte_pour_synthese("Yah to acte de naissance") == "Yah to akte de nesaas"
+
+    def test_aucun_chiffre_ne_part_au_modele(self):
+        dit = texte_pour_synthese("Numéro de suivi maa ko SM-2026-000452, 200 francs.")
+        assert not any(c.isdigit() for c in dit), dit
+
+    def test_un_texte_vide_ou_absent_ne_casse_rien(self):
+        assert texte_pour_synthese("") == ""
+        assert texte_pour_synthese(None) == ""
+
+    def test_la_fonction_est_idempotente_sur_un_texte_sans_chiffre(self):
+        # `catalogue_audio.cle_phrase` et `tts_client.synthesize_remote`
+        # appellent tous deux la chaîne : son résultat doit être stable.
+        une_fois = texte_pour_synthese("Aɗa soklii 200 francs.")
+        assert texte_pour_synthese(une_fois) == une_fois

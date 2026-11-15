@@ -524,6 +524,29 @@ def _phrases_systeme() -> dict[str, dict]:
     return _lire("phrases_systeme", charger)
 
 
+#: Préfixe des phrases système qui portent le libellé d'une valeur
+#: d'énumération (migration 033). Voir `libelles_enum_pulaar`.
+PREFIXE_VALEUR_ENUM = "valeur_"
+
+
+def libelles_enum_pulaar() -> dict[str, str]:
+    """
+    Code d'énumération (« polygamie_2 ») -> son pulaar RELU.
+
+    Les codes non relus sont absents du dictionnaire, jamais présents avec
+    leur traduction automatique : `gabarits._valeur_pulaar` renvoie alors
+    `None`, et le français repart au traducteur. C'est la règle de tout le
+    dispositif — une traduction que personne n'a lue n'est jamais dite.
+    """
+    return {
+        ligne["cle"][len(PREFIXE_VALEUR_ENUM):]: ligne["pulaar"].strip()
+        for ligne in _phrases_systeme().values()
+        if ligne["cle"].startswith(PREFIXE_VALEUR_ENUM)
+        and ligne.get("pulaar_valide")
+        and (ligne.get("pulaar") or "").strip()
+    }
+
+
 def phrase_systeme(cle: str) -> Phrase:
     """
     Une phrase fixe de l'agent, par sa clé.
@@ -672,7 +695,10 @@ def rendre_gabarit(
         return None
     pulaar = None
     if ligne.get("pulaar_valide") and ligne.get("pulaar"):
-        pulaar = gabarits.rendre(ligne["pulaar"], slots, definitions, gabarits.PULAAR)
+        pulaar = gabarits.rendre(
+            ligne["pulaar"], slots, definitions, gabarits.PULAAR,
+            libelles_pulaar=libelles_enum_pulaar(),
+        )
     return Phrase(
         francais=francais,
         pulaar=pulaar,

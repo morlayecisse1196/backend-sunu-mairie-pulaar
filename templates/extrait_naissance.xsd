@@ -68,15 +68,24 @@
     <xs:annotation>
       <xs:documentation>
         Correspond à la suite de cases numérotées en bas du formulaire
-        officiel ("ERVE 1 |_|_|_|..."). NOMBRE EXACT DE CHIFFRES NON
-        CONFIRMÉ sur les deux modèles disponibles — estimé à 19 chiffres
-        d'après le comptage des cases visibles sur le formulaire vierge.
-        À FAIRE VALIDER auprès du service d'état civil avant mise en
-        production (cf. section "hypothèses à valider").
+        officiel ("ERVE 1 |_|_|_|...").
+
+        CORRIGÉ le 2026-09-26 : la règle exigeait EXACTEMENT 19 chiffres,
+        estimés d'après le comptage des cases du formulaire vierge. C'était une
+        hypothèse, et elle bloquait la réalité : un registre qui inscrit
+        « 412 » voyait sa génération REFUSÉE, sans recours pour le consultant.
+        Découvert en montant le parcours complet
+        (tests/unit/test_parcours_naissance_complet.py).
+
+        La borne haute est conservée (19 cases comptées) ; la borne basse
+        tombe à 1. Le nombre exact reste À FAIRE VALIDER auprès du service
+        d'état civil : si vos registres numérotent autrement (avec un tiret,
+        une année, une lettre), cette règle est à revoir — elle n'accepte que
+        des chiffres.
       </xs:documentation>
     </xs:annotation>
     <xs:restriction base="xs:string">
-      <xs:pattern value="[0-9]{19}"/>
+      <xs:pattern value="[0-9]{1,19}"/>
     </xs:restriction>
   </xs:simpleType>
 

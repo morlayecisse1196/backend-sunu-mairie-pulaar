@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           targetNamespace="http://sunu-mairie.sn/schemas/acte-deces"
+           xmlns:tns="http://sunu-mairie.sn/schemas/acte-deces"
+           elementFormDefault="qualified">
+
+  <xs:annotation>
+    <xs:documentation>
+      Schéma XML (XSD) d'un ACTE DE DÉCÈS délivré par une mairie — étape 5.5
+      du plan maître.
+
+      ⚠️ ORIGINE DU MODÈLE, À LIRE AVANT DE S'EN SERVIR : construit à partir
+      d'une copie intégrale d'acte de décès de la mairie de Ris-Orangis
+      (Essonne, FRANCE), fournie comme exemple le 2026-09-25. Ce n'est PAS un
+      acte sénégalais. La structure de l'acte sénégalais vient de la même
+      tradition d'état civil et lui ressemble, mais les mentions exactes, leur
+      caractère obligatoire et la formule de clôture peuvent différer.
+      TOUT ce qui suit est donc une HYPOTHÈSE DE FORME, à faire confirmer par
+      un officier d'état civil sénégalais avant mise en service (règle 3 du
+      plan maître). Les éléments dont l'exigence n'est pas établie sont
+      minOccurs="0" : mieux vaut un champ vide qu'une mention fabriquée.
+
+      CE QUI N'EST PAS ICI, ET N'Y SERA JAMAIS : la cause du décès. Le
+      certificat médical la porte ; l'acte de la mairie, non — le modèle réel
+      le confirme, il n'en dit pas un mot. Aucune donnée de santé n'entre dans
+      cette application.
+    </xs:documentation>
+  </xs:annotation>
+
+  <!-- ===================== TYPES SIMPLES ===================== -->
+
+  <xs:simpleType name="TexteCourt">
+    <xs:restriction base="xs:string">
+      <xs:minLength value="1"/>
+      <xs:maxLength value="100"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="TexteLong">
+    <xs:annotation>
+      <xs:documentation>Mentions « en toutes lettres » et adresses complètes (« 26 rue d'Ulm, Paris 5e »).</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:minLength value="1"/>
+      <xs:maxLength value="300"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="NumeroActe">
+    <xs:annotation>
+      <xs:documentation>« Acte de décès n°543 » : des chiffres, jamais fabriqués par l'application — le registre papier fait foi.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[0-9]{1,6}"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="Sexe">
+    <xs:annotation>
+      <xs:documentation>
+        Valeurs du dialogue vocal (migration 028). Le sexe n'est pas imprimé
+        tel quel : il décide de l'accord (« est décédé » / « est décédée »),
+        comme sur le modèle réel.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="masculin"/>
+      <xs:enumeration value="feminin"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="SituationMatrimoniale">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="celibataire"/>
+      <xs:enumeration value="marie"/>
+      <xs:enumeration value="veuf"/>
+      <xs:enumeration value="divorce"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- ===================== TYPES COMPLEXES ===================== -->
+
+  <xs:complexType name="EnTeteAdministratif">
+    <xs:annotation>
+      <xs:documentation>Même bandeau que les deux autres actes sénégalais (région, département, commune, centre).</xs:documentation>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:element name="region" type="tns:TexteCourt"/>
+      <xs:element name="departement" type="tns:TexteCourt"/>
+      <xs:element name="arrondissement" type="tns:TexteCourt" minOccurs="0"/>
+      <xs:element name="collectiviteLocale" type="tns:TexteCourt"/>
+      <xs:element name="typeCentre" type="tns:TexteCourt" minOccurs="0"/>
+      <xs:element name="nomCentreEtatCivil" type="tns:TexteCourt"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="Defunt">
+    <xs:annotation>
+      <xs:documentation>
+        « ... est décédé 26 rue d'Ulm, X Y, domicilié à Ris-Orangis, né à Z
+        (Algérie) le 15 juillet 1930, retraité, fils de A et de B, décédés.
+        Époux de Marguerite. »
+
+        conjoint : minOccurs="0" — le dialogue ne demande pas le nom du
+        conjoint, seulement la situation matrimoniale. Le consultant peut le
+        saisir ; sans lui, la mention n'est pas imprimée plutôt qu'inventée.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:element name="prenoms" type="tns:TexteCourt"/>
+      <xs:element name="nomFamille" type="tns:TexteCourt"/>
+      <xs:element name="sexe" type="tns:Sexe"/>
+      <xs:element name="dateNaissanceLettres" type="tns:TexteLong"/>
+      <xs:element name="dateNaissance" type="xs:date"/>
+      <xs:element name="lieuNaissance" type="tns:TexteCourt"/>
+      <xs:element name="profession" type="tns:TexteCourt"/>
+      <xs:element name="domicile" type="tns:TexteLong"/>
+      <xs:element name="nationalite" type="tns:TexteCourt"/>
+      <xs:element name="situationMatrimoniale" type="tns:SituationMatrimoniale"/>
+      <xs:element name="conjoint" type="tns:TexteCourt" minOccurs="0"/>
+      <xs:element name="nomPere" type="tns:TexteCourt"/>
+      <xs:element name="nomMere" type="tns:TexteCourt"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="Deces">
+    <xs:annotation>
+      <xs:documentation>
+        « Le neuf octobre deux mil quatre, à deux heures trente minutes, est
+        décédé 26 rue d'Ulm ». Le lieu du décès est l'adresse ou
+        l'établissement, distinct de la commune qui tient le registre.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:element name="dateDecesLettres" type="tns:TexteLong"/>
+      <xs:element name="dateDeces" type="xs:date"/>
+      <xs:element name="heureDecesLettres" type="tns:TexteLong" minOccurs="0"/>
+      <xs:element name="lieuDeces" type="tns:TexteLong"/>
+      <xs:element name="communeDeces" type="tns:TexteCourt"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="Declaration">
+    <xs:annotation>
+      <xs:documentation>
+        « Dressé le 11 octobre 2004, à 11 heures 22 minutes, sur la déclaration
+        de Charles X, âgé de 61 ans, assistant funéraire, exerçant à ... »
+
+        L'âge, la profession et l'adresse du déclarant figurent sur le modèle
+        français ; le dialogue sénégalais ne les demande pas (il demande le
+        lien avec le défunt et la pièce d'identité). Ils sont donc
+        minOccurs="0" et saisissables par le consultant — à confirmer.
+      </xs:documentation>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:element name="dateDressageLettres" type="tns:TexteLong"/>
+      <xs:element name="nomDeclarant" type="tns:TexteCourt"/>
+      <xs:element name="lienAvecDefunt" type="tns:TexteCourt"/>
+      <xs:element name="ageDeclarant" type="tns:TexteCourt" minOccurs="0"/>
+      <xs:element name="professionDeclarant" type="tns:TexteCourt" minOccurs="0"/>
+      <xs:element name="domicileDeclarant" type="tns:TexteLong" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="Delivrance">
+    <xs:sequence>
+      <xs:element name="lieuDelivrance" type="tns:TexteCourt"/>
+      <xs:element name="dateDelivrance" type="xs:date"/>
+      <xs:element name="officierEtatCivil" type="tns:TexteCourt"/>
+      <xs:element name="notesMentionsMarginales" type="tns:TexteLong" minOccurs="0"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <!-- ===================== ÉLÉMENT RACINE ===================== -->
+
+  <xs:element name="acteDeces">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="numeroActe" type="tns:NumeroActe"/>
+        <xs:element name="enTeteAdministratif" type="tns:EnTeteAdministratif"/>
+        <xs:element name="defunt" type="tns:Defunt"/>
+        <xs:element name="deces" type="tns:Deces"/>
+        <xs:element name="declaration" type="tns:Declaration"/>
+        <xs:element name="delivrance" type="tns:Delivrance"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+</xs:schema>

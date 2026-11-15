@@ -30,11 +30,23 @@ def list_communes_admin() -> list:
 
 
 def create_commune(
-    nom: str, region: Optional[str], departement: Optional[str], arrondissement: Optional[str]
+    nom: str, region: Optional[str], departement: Optional[str], arrondissement: Optional[str],
+    latitude: Optional[float] = None, longitude: Optional[float] = None,
 ) -> Optional[dict]:
+    """
+    Les coordonnées sont facultatives et par défaut absentes : une commune
+    sans coordonnées n'est simplement jamais proposée par `GET
+    /communes/proche` (migration 015). Mieux vaut ne rien proposer que
+    d'envoyer vers la mauvaise mairie quelqu'un qui ne peut pas relire la
+    liste.
+    """
     try:
         supabase = get_supabase_client()
         payload = {"nom": nom, "region": region, "departement": departement, "arrondissement": arrondissement}
+        if latitude is not None:
+            payload["latitude"] = latitude
+        if longitude is not None:
+            payload["longitude"] = longitude
         response = supabase.table("communes").insert(payload).execute()
         return response.data[0] if response.data else None
     except Exception as e:
@@ -103,6 +115,22 @@ def get_tampon_signed_url(chemin: str, expires_in: int = 3600) -> Optional[str]:
         return result.get("signedURL") or result.get("signedUrl")
     except Exception as e:
         print(f"⚠️ Génération d'URL signée (tampon) échouée pour {chemin!r} ({e}).")
+        return None
+
+
+def telecharger_tampon(chemin: str) -> Optional[bytes]:
+    """
+    L'image du tampon elle-même, pour l'apposer sur un document généré.
+
+    Le contenu, pas une URL signée : celle-ci expire au bout d'une heure, et un
+    PDF qui perdrait son tampon quelques heures après avoir été produit serait
+    pire qu'un PDF sans tampon — il aurait l'air d'un document trafiqué.
+    """
+    try:
+        supabase = get_supabase_client()
+        return supabase.storage.from_(BUCKET_TAMPONS).download(chemin)
+    except Exception as e:
+        print(f"⚠️ Téléchargement du tampon échoué pour {chemin!r} ({e}).")
         return None
 
 

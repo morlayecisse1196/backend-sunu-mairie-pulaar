@@ -18,7 +18,10 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from supabase_client import get_supabase_client
-from dialogue_engine import MAX_DOCUMENT_BYTES, TYPES_MIME_DOCUMENT_VALIDES, construire_champs_formulaire
+from dialogue_engine import (
+    CHAMPS_FORMULAIRE_PAR_TYPE_DOCUMENT, MAX_DOCUMENT_BYTES,
+    TYPES_MIME_DOCUMENT_VALIDES, construire_champs_formulaire,
+)
 
 # Bucket Storage PRIVÉ (jamais public) pour les documents de dossier : ce sont
 # des pièces d'identité et actes d'état civil (CNI, certificat de naissance),
@@ -70,6 +73,41 @@ def resoudre_commune_id(nom_commune: Optional[str]) -> Optional[str]:
     except Exception as e:
         print(f"⚠️ Résolution commune_id échouée pour {nom_commune!r} ({e}).")
         return None
+
+
+def list_noms_communes() -> list:
+    """
+    Les noms de communes qu'un citoyen peut choisir à l'inscription — c'est-à-
+    dire exactement ceux que `resoudre_commune_id` sait résoudre.
+
+    POURQUOI PAS `demarches_repo.list_communes()`
+
+    Cette autre fonction lit les valeurs distinctes de `demarches.commune`, ce
+    qui est juste pour ce qu'elle sert (`seed_communes.py` y cherche les
+    communes à créer). Mais `GET /communes` s'en servait pour peupler le
+    sélecteur de l'inscription, et ce n'est pas la même question. Deux défauts,
+    tous deux observés sur la base réelle :
+
+      * elle renvoyait « National », qui n'est PAS une commune mais la
+        sentinelle du RAG informationnel. Un citoyen qui la choisissait voyait
+        son profil enregistré sur « National », que `resoudre_commune_id`
+        refuse : son dossier ne pouvait être rattaché à AUCUNE mairie, et
+        n'apparaissait dans la liste d'aucun consultant ;
+      * elle omettait toute commune sans démarche propre — Ross-Béthio et
+        Dindéfélo, les communes du pilote, pourtant seedées avec leurs
+        coordonnées et leur tampon. Leurs habitants ne pouvaient pas s'inscrire
+        pour leur propre mairie.
+
+    Ne lève jamais : une liste vide plutôt qu'un 500, les clients ayant un
+    repli.
+    """
+    try:
+        supabase = get_supabase_client()
+        response = supabase.table("communes").select("nom").order("nom").execute()
+        return [ligne["nom"] for ligne in (response.data or []) if ligne.get("nom")]
+    except Exception as e:
+        print(f"⚠️ Liste des noms de communes échouée ({e}).")
+        return []
 
 
 def create_dossier(
@@ -246,23 +284,55 @@ def get_commune(commune_id: Optional[str]) -> Optional[dict]:
         return None
 
 
+def type_document_acte(type_demarche: Optional[str]) -> Optional[str]:
+    """
+    Le `type_document` du formulaire de l'acte, pour une démarche donnée.
+
+    C'est le nom de la démarche elle-même — "extrait_naissance" hier (valeur
+    inchangée, les lignes déjà en base restent lisibles), "constatation_mariage"
+    depuis l'étape 5.5. Une démarche sans champs à saisir à la main renvoie
+    None : pas de formulaire vide à faire remplir au consultant.
+
+    Volontairement PAS le type du document uploadé : "certificat_mariage"
+    désigne déjà une PIÈCE fournie par le citoyen (le certificat d'un mariage
+    antérieur, pour une naissance). Les confondre mélangerait la pièce reçue
+    et l'acte produit dans le même formulaire.
+    """
+    type_demarche = type_demarche or "extrait_naissance"
+    if type_demarche not in CHAMPS_FORMULAIRE_PAR_TYPE_DOCUMENT:
+        return None
+    return type_demarche
+
+
 def get_or_create_formulaire_acte(dossier_id: str) -> Optional[dict]:
     """
-    Formulaire "extrait_naissance" (Tâche D.2) : contrairement aux formulaires
-    de get_or_create_document_formulaire (un par PIÈCE uploadée), celui-ci
-    porte les champs propres au document de SORTIE lui-même (numéro d'acte et
-    de registre, signataire, bloc jugement) — rattachés à aucun document
+    Formulaire du document de SORTIE : contrairement aux formulaires de
+    get_or_create_document_formulaire (un par PIÈCE uploadée), celui-ci porte
+    les champs propres à l'acte produit (numéro et année du registre,
+    mentions « en toutes lettres », signataire) — rattachés à aucun document
     photographié, donc document_id reste NULL. Toujours créé vide (aucune
     correspondance dialogue fiable pour ces champs, cf. dialogue_engine.py) :
-    entièrement à la saisie manuelle du consultant.
+    entièrement à la saisie manuelle du consultant, qui a le registre papier
+    sous les yeux.
+
+    Étape 5.5 : les champs dépendent de la DÉMARCHE. Avant, tout dossier
+    recevait le formulaire de l'extrait de naissance — un dossier de mariage
+    héritait donc de champs qui ne le concernaient pas (bloc jugement
+    supplétif) et n'avait aucune case pour les siens. Sa génération échouait
+    sur des champs obligatoires que personne ne pouvait remplir.
     """
+    dossier = get_dossier(dossier_id)
+    type_document = type_document_acte((dossier or {}).get("type_demarche"))
+    if type_document is None:
+        return None
+
     supabase = get_supabase_client()
     try:
         existant = (
             supabase.table("document_formulaires")
             .select("*")
             .eq("dossier_id", dossier_id)
-            .eq("type_document", "extrait_naissance")
+            .eq("type_document", type_document)
             .is_("document_id", "null")
             .limit(1)
             .execute()
@@ -273,12 +343,12 @@ def get_or_create_formulaire_acte(dossier_id: str) -> Optional[dict]:
         print(f"⚠️ Lecture du formulaire acte échouée pour dossier {dossier_id} ({e}).")
         return None
 
-    champs = construire_champs_formulaire("extrait_naissance", {})
+    champs = construire_champs_formulaire(type_document, {})
     try:
         payload = {
             "dossier_id": dossier_id,
             "document_id": None,
-            "type_document": "extrait_naissance",
+            "type_document": type_document,
             "champs": champs,
             "statut": "a_remplir",
         }

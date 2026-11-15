@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import re
 
-from services import pulaar_nombres
+from services import libelles_document, pulaar_nombres
 from services.journal import obtenir_logger
 
 log = obtenir_logger("gabarits")
@@ -65,10 +65,17 @@ def _valeur_francais(champ: dict, valeur) -> str | None:
         return f"{valeur['valeur']} {valeur['unite']}"
     if type_valeur == "nombre":
         return f"{valeur:g}" if isinstance(valeur, float) else str(valeur)
+    if type_valeur == "enum":
+        # Le code brut sortait tel quel : « Régime des biens :
+        # separation_des_biens », tiret bas compris, lu à voix haute à un
+        # citoyen. `VALEURS_EN_LETTRES` est la source déjà employée par le PDF
+        # et par la lecture champ par champ — s'en écarter ferait dire deux
+        # choses différentes au même dossier selon l'écran.
+        return libelles_document.VALEURS_EN_LETTRES.get(valeur, str(valeur))
     return str(valeur)
 
 
-def _valeur_pulaar(champ: dict, valeur) -> str | None:
+def _valeur_pulaar(champ: dict, valeur, libelles_pulaar: dict | None = None) -> str | None:
     type_valeur = champ.get("type_valeur", "texte")
     if valeur is None:
         return None
@@ -85,14 +92,27 @@ def _valeur_pulaar(champ: dict, valeur) -> str | None:
             return None
     if type_valeur == "enum":
         # « masculin », « polygamie »… sont des mots français : les dire tels
-        # quels en pulaar serait faux. Sans traduction relue, pas de pulaar.
-        return None
+        # quels en pulaar serait faux. Leur traduction relue vit dans
+        # `phrases_systeme`, sous la clé `valeur_<code>` (migration 033), et
+        # l'appelant la passe ici — `gabarits` ne lit pas la base lui-même, et
+        # l'importer créerait un cycle avec `services.demarche`.
+        #
+        # Absente ou pas encore relue : toujours `None`, donc le français
+        # repart au traducteur. La règle ne change pas ; elle a seulement un
+        # endroit où être satisfaite.
+        return (libelles_pulaar or {}).get(str(valeur)) or None
     # Un nom propre ou un nom de commune se dit tel quel : le traduire serait
     # une faute, pas une amélioration.
     return str(valeur)
 
 
-def rendre(gabarit: str | None, slots: dict, champs: list[dict], langue: str = FRANCAIS) -> str | None:
+def rendre(
+    gabarit: str | None,
+    slots: dict,
+    champs: list[dict],
+    langue: str = FRANCAIS,
+    libelles_pulaar: dict | None = None,
+) -> str | None:
     """
     Remplit un gabarit, ou retourne `None` si une valeur manque ou n'est pas
     énonçable.
@@ -100,6 +120,12 @@ def rendre(gabarit: str | None, slots: dict, champs: list[dict], langue: str = F
     `champs` sont les lignes `demarche_champs` : c'est leur `type_valeur` qui
     décide comment une valeur se dit, jamais le nom du champ. Une démarche
     ajoutée demain fonctionne sans toucher à ce module.
+
+    `libelles_pulaar` va du code d'une énumération (« polygamie_2 ») à sa
+    traduction RELUE. Il est fourni par l'appelant plutôt que lu ici : ce
+    module ne touche pas la base, et l'y brancher créerait un cycle d'import
+    avec `services.demarche`. Omis, les champs `enum` restent sans pulaar,
+    comme avant.
     """
     if not gabarit or not gabarit.strip():
         return None
@@ -112,7 +138,7 @@ def rendre(gabarit: str | None, slots: dict, champs: list[dict], langue: str = F
             log.error("Gabarit : le champ %r n'existe pas dans cette démarche.", nom)
             return None
         valeur = (
-            _valeur_pulaar(champ, slots.get(nom))
+            _valeur_pulaar(champ, slots.get(nom), libelles_pulaar)
             if langue == PULAAR
             else _valeur_francais(champ, slots.get(nom))
         )

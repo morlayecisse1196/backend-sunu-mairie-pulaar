@@ -454,6 +454,88 @@ def grouper_documents(definition_documents: list) -> list[list[dict]]:
     return sorted(groupes.values(), key=lambda g: min(d["ordre"] for d in g))
 
 
+def _etapes_ordonnees(definition_champs: list, definition_documents: list) -> list[tuple]:
+    """Champs et groupes de documents dans l'ordre où le dialogue les demande."""
+    etapes = [("champ", c["ordre"], c) for c in definition_champs] + [
+        ("document", min(d["ordre"] for d in groupe), groupe)
+        for groupe in grouper_documents(definition_documents)
+    ]
+    etapes.sort(key=lambda t: t[1])
+    return etapes
+
+
+def champs_obligatoires_manquants(
+    slots: dict,
+    definition_champs: list,
+    champs_ignores: set | None = None,
+) -> list[str]:
+    """
+    Les champs OBLIGATOIRES encore vides que le dialogue peut encore demander.
+
+    Sert de dernier verrou avant la relecture (RG7) : tant qu'il en reste un,
+    on ne relit pas un dossier incomplet au citoyen et on ne l'envoie pas à la
+    mairie.
+
+    Lit la DÉFINITION de la démarche, jamais une liste écrite dans le code.
+    L'ancienne liste en dur ne connaissait que l'extrait de naissance : pour la
+    constatation de mariage et la déclaration de décès, elle réclamait
+    éternellement des champs qui n'existent pas dans ces démarches, et le
+    dialogue ne pouvait jamais aboutir.
+
+    Un champ écarté par sa condition ne manque pas (il ne sera pas demandé).
+    Un champ dont la condition est encore INCONNUE manque, lui : on ne relit
+    pas un dossier tant qu'on ignore s'il est complet.
+    """
+    ignores = champs_ignores or set()
+    return [
+        champ["nom_champ"]
+        for champ in definition_champs
+        if champ.get("obligatoire")
+        and champ["nom_champ"] not in ignores
+        and not _champ_est_rempli(champ, slots)
+        and conditions.evaluer(condition_de(champ), slots) != conditions.FAUX
+    ]
+
+
+def progression(
+    slots: dict,
+    documents_satisfaits: set,
+    definition_champs: list,
+    definition_documents: list,
+    champs_ignores: set | None = None,
+) -> dict:
+    """
+    Où en est le citoyen : `{"faites": n, "total": m}` sur les MÊMES étapes que
+    `determiner_etape_courante` — c'est la seule façon d'être sûr que la barre
+    montre l'avancement réel du dialogue et non un décompte parallèle qui
+    dériverait au premier champ conditionnel.
+
+    Une étape écartée par sa condition (« nom du père » quand les parents ne
+    sont pas mariés) ne compte dans aucun des deux nombres : elle ne sera
+    jamais demandée. Une condition encore INCONNUE compte au total — elle peut
+    encore arriver. **Le total peut donc bouger en cours de dialogue** : c'est
+    la vérité de ces démarches, où les questions dépendent des réponses.
+    """
+    ignores = champs_ignores or set()
+    faites = total = 0
+
+    for type_etape, _ordre, contenu in _etapes_ordonnees(definition_champs, definition_documents):
+        if type_etape == "champ":
+            satisfaite = contenu["nom_champ"] in ignores or _champ_est_rempli(contenu, slots)
+            ligne = contenu
+        else:
+            satisfaite = any(d["type_document"] in documents_satisfaits for d in contenu)
+            ligne = contenu[0]
+
+        if satisfaite:
+            faites += 1
+            total += 1
+        elif conditions.evaluer(condition_de(ligne), slots) != conditions.FAUX:
+            total += 1
+
+    return {"faites": faites, "total": total}
+
+
 def determiner_etape_courante(
     slots: dict,
     documents_recus: set,
@@ -477,13 +559,7 @@ def determiner_etape_courante(
     """
     ignores = champs_ignores or set()
 
-    etapes = [("champ", c["ordre"], c) for c in definition_champs] + [
-        ("document", min(d["ordre"] for d in groupe), groupe)
-        for groupe in grouper_documents(definition_documents)
-    ]
-    etapes.sort(key=lambda t: t[1])
-
-    for type_etape, _ordre, contenu in etapes:
+    for type_etape, _ordre, contenu in _etapes_ordonnees(definition_champs, definition_documents):
         if type_etape == "champ":
             if contenu["nom_champ"] in ignores or _champ_est_rempli(contenu, slots):
                 continue
@@ -593,7 +669,7 @@ def _resultat_blocage(violation: regles_demarche.Violation) -> dict:
     )
 
 
-async def traiter_tour_administratif(etat: dict, message: str, headers: dict) -> dict:
+async def _tour_administratif(etat: dict, message: str, headers: dict, contexte: dict) -> dict:
     """
     Orchestrateur complet du mode administratif (plan §1) — destiné à
     remplacer, en Tâche J.5, le bloc `elif etat["mode"] == "administratif":`
@@ -642,12 +718,15 @@ async def traiter_tour_administratif(etat: dict, message: str, headers: dict) ->
     version = etat.get("demarche_version")
     definition_champs = charger_definition_demarche(type_demarche, version)
     definition_documents = charger_documents_demarche(type_demarche, version)
+    contexte["definition_champs"] = definition_champs
+    contexte["definition_documents"] = definition_documents
     regles = regles_demarche.charger_regles(type_demarche, version)
     compteurs = etat.setdefault("compteurs_echecs", {})
     raisons = etat.setdefault("dernieres_raisons", {})
     # Champs FACULTATIFS auxquels le citoyen n'a pas su répondre : écartés pour
     # de bon, comme `documents_ignores` plus bas pour les pièces.
     champs_ignores = etat.setdefault("champs_ignores", set())
+    contexte["champs_ignores"] = champs_ignores
 
     # Délai qui interrompt la démarche (plan étape 2.1, forme 2). Évalué en
     # tête de tour, et pas seulement après une saisie : une session reprise
@@ -666,6 +745,7 @@ async def traiter_tour_administratif(etat: dict, message: str, headers: dict) ->
     if etat.get("dossier_id"):
         documents_recus = {d["type"] for d in list_documents(etat["dossier_id"])}
     documents_satisfaits = documents_recus | documents_ignores
+    contexte["documents_satisfaits"] = documents_satisfaits
 
     etape = determiner_etape_courante(
         etat["slots"], documents_satisfaits, definition_champs, definition_documents, champs_ignores
@@ -862,6 +942,32 @@ async def traiter_tour_administratif(etat: dict, message: str, headers: dict) ->
     return resultat
 
 
+async def traiter_tour_administratif(etat: dict, message: str, headers: dict) -> dict:
+    """
+    Le tour administratif, plus l'avancement dans la démarche.
+
+    La progression est calculée APRÈS le tour, sur l'état qu'il laisse : elle
+    dit donc « voilà où vous en êtes maintenant », et non où on en était avant
+    la réponse. Elle est absente quand le tour s'arrête avant d'avoir regardé
+    les pièces (démarche bloquée par une règle) : il n'y a alors plus
+    d'avancement à montrer.
+    """
+    contexte: dict = {}
+    resultat = await _tour_administratif(etat, message, headers, contexte)
+    if "documents_satisfaits" in contexte:
+        resultat["manquants"] = champs_obligatoires_manquants(
+            etat["slots"], contexte["definition_champs"], contexte["champs_ignores"]
+        )
+        resultat["progression"] = progression(
+            etat["slots"],
+            contexte["documents_satisfaits"],
+            contexte["definition_champs"],
+            contexte["definition_documents"],
+            contexte["champs_ignores"],
+        )
+    return resultat
+
+
 def verifier_document_recu_et_avancer(etat: dict) -> dict | None:
     """
     Bug réel remonté en test terrain (2026-08-24) : après avoir envoyé la
@@ -909,4 +1015,7 @@ def verifier_document_recu_et_avancer(etat: dict) -> dict | None:
 
     resultat = _reponse_pour_etape(etape, confirmation=demarche.phrase_systeme("confirmation_photo"))
     resultat["cas_particulier_cree"] = False
+    resultat["manquants"] = champs_obligatoires_manquants(
+        etat["slots"], definition_champs, etat.get("champs_ignores")
+    )
     return resultat

@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  acte_deces_v1.xml — étape 5.5 du plan maître.
+
+  TEMPLATE de génération : chaque feuille porte un source="..." que
+  document_generator.py résout contre le dossier. Ce fichier échouerait la
+  validation XSD tel quel — ce n'est pas son rôle.
+
+  ⚠️ Construit d'après un acte FRANÇAIS donné en exemple (Ris-Orangis,
+  Essonne). Voir l'avertissement en tête de acte_deces.xsd : toutes les
+  mentions sont des hypothèses de forme à confirmer par un officier d'état
+  civil sénégalais.
+
+  AUCUNE CAUSE DE DÉCÈS : ni ici, ni dans le XSD, ni dans la base. Le
+  certificat médical la porte, l'acte de la mairie non.
+
+  Ce que le consultant saisit à la main (formulaire.*) : le numéro de l'acte,
+  les mentions « en toutes lettres », le signataire, et les mentions du
+  déclarant que le dialogue ne demande pas (âge, profession, adresse).
+-->
+<document type="declaration_deces" version="1.0"
+          xsd="acte_deces.xsd"
+          racine="acteDeces"
+          espaceNoms="http://sunu-mairie.sn/schemas/acte-deces">
+
+  <numeroActe source="formulaire.numeroActe" obligatoire="true"/>
+
+  <enTeteAdministratif>
+    <region source="commune.region" obligatoire="true"/>
+    <departement source="commune.departement" obligatoire="true"/>
+    <arrondissement source="commune.arrondissement" obligatoire="false"/>
+    <collectiviteLocale source="commune.nom" obligatoire="true"/>
+    <typeCentre source="formulaire.typeCentre" obligatoire="false"/>
+    <nomCentreEtatCivil source="commune.nom" obligatoire="true"/>
+  </enTeteAdministratif>
+
+  <defunt>
+    <prenoms cle="defuntPrenoms" source="dossier.prenoms_defunt" obligatoire="true"/>
+    <nomFamille cle="defuntNomFamille" source="dossier.nom_defunt" obligatoire="true"/>
+    <!-- Non imprimé tel quel : décide de l'accord « décédé » / « décédée ». -->
+    <sexe cle="defuntSexe" source="dossier.sexe_defunt" obligatoire="true"/>
+    <dateNaissanceLettres cle="defuntDateNaissanceLettres" source="formulaire.dateNaissanceDefuntLettres|lettres.dossier.date_naissance_defunt" obligatoire="true"/>
+    <dateNaissance cle="defuntDateNaissance" source="dossier.date_naissance_defunt" format="aaaa-mm-jj" obligatoire="true"/>
+    <lieuNaissance cle="defuntLieuNaissance" source="dossier.lieu_naissance_defunt" obligatoire="true"/>
+    <profession cle="defuntProfession" source="dossier.profession_defunt" obligatoire="true"/>
+    <domicile cle="defuntDomicile" source="dossier.domicile_defunt" obligatoire="true"/>
+    <nationalite cle="defuntNationalite" source="dossier.nationalite_defunt" obligatoire="true"/>
+    <situationMatrimoniale cle="defuntSituationMatrimoniale" source="dossier.situation_matrimoniale_defunt" obligatoire="true"/>
+    <!-- « Époux de Marguerite » : le dialogue ne demande pas ce nom. Saisi par
+         le consultant s'il l'a, absent sinon — jamais deviné. -->
+    <conjoint cle="defuntConjoint" source="formulaire.nomConjointDefunt" obligatoire="false"/>
+    <nomPere cle="defuntNomPere" source="dossier.nom_pere_defunt" obligatoire="true"/>
+    <nomMere cle="defuntNomMere" source="dossier.nom_mere_defunt" obligatoire="true"/>
+  </defunt>
+
+  <deces>
+    <dateDecesLettres source="formulaire.dateDecesLettres|lettres.dossier.date_deces" obligatoire="true"/>
+    <dateDeces source="dossier.date_deces" format="aaaa-mm-jj" obligatoire="true"/>
+    <!-- Le dialogue collecte `heure_deces` en texte libre (« deux heures et
+         demie du matin ») : imprimé tel qu'il a été dit, ou recopié du
+         certificat médical par le consultant. -->
+    <heureDecesLettres source="formulaire.heureDecesLettres|dossier.heure_deces" obligatoire="false"/>
+    <lieuDeces source="dossier.lieu_deces" obligatoire="true"/>
+    <communeDeces source="dossier.commune_deces" obligatoire="true"/>
+  </deces>
+
+  <declaration>
+    <dateDressageLettres source="formulaire.dateDressageLettres" obligatoire="true"/>
+    <nomDeclarant source="dossier.nom_declarant" obligatoire="true"/>
+    <lienAvecDefunt source="dossier.lien_avec_defunt" obligatoire="true"/>
+    <!-- Mentions présentes sur le modèle français, non demandées à l'oral au
+         Sénégal : à confirmer par un officier d'état civil. -->
+    <ageDeclarant source="formulaire.ageDeclarant" obligatoire="false"/>
+    <professionDeclarant source="formulaire.professionDeclarant" obligatoire="false"/>
+    <domicileDeclarant source="formulaire.domicileDeclarant" obligatoire="false"/>
+  </declaration>
+
+  <delivrance>
+    <lieuDelivrance source="commune.nom" obligatoire="true"/>
+    <dateDelivrance source="systeme.date_generation" format="aaaa-mm-jj" obligatoire="true"/>
+    <officierEtatCivil source="formulaire.officierEtatCivil" obligatoire="true"/>
+    <notesMentionsMarginales source="formulaire.notesMentionsMarginales" obligatoire="false"/>
+  </delivrance>
+
+</document>

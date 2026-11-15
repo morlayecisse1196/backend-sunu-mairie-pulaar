@@ -109,8 +109,19 @@ class TestChampChoix:
         assert "enum" not in build_schema_champ_cible("texte")["properties"]["valeur"]
 
     def test_le_pulaar_ne_dit_pas_un_mot_francais(self):
+        # Sans libellé relu, pas de pulaar : le français repart au traducteur.
         assert gabarits.rendre("{sexe_enfant}", {"sexe_enfant": "feminin"}, [SEXE], gabarits.PULAAR) is None
-        assert gabarits.rendre("{sexe_enfant}", {"sexe_enfant": "feminin"}, [SEXE]) == "feminin"
+        # Avec un libellé relu (phrases_systeme, clé `valeur_feminin`), il est dit.
+        assert gabarits.rendre(
+            "{sexe_enfant}", {"sexe_enfant": "feminin"}, [SEXE], gabarits.PULAAR,
+            libelles_pulaar={"feminin": "debbo"},
+        ) == "debbo"
+
+    def test_le_francais_ne_dit_pas_un_code_technique(self):
+        # Le code brut ressortait tel quel : « Sexe : feminin », et pire
+        # « Régime des biens : separation_des_biens », tiret bas compris, lu à
+        # voix haute à un citoyen.
+        assert gabarits.rendre("{sexe_enfant}", {"sexe_enfant": "feminin"}, [SEXE]) == "Féminin"
 
     def test_un_choix_sans_liste_est_bloquant(self):
         problemes = editeur._verifier_champs([{**SEXE, "regle_validation": "masculin"}])
@@ -134,22 +145,26 @@ class TestDemarcheSansModele:
     un extrait de naissance avec des données de mariage.
     """
 
-    def test_le_mariage_refuse_la_generation(self, monkeypatch):
+    def test_une_demarche_sans_modele_refuse_la_generation(self, monkeypatch):
+        # Les trois démarches d'état civil ont leur modèle depuis l'étape 5.5 ;
+        # le garde-fou protège celles qu'on publiera ensuite.
         monkeypatch.setattr(gen, "get_dossier",
-                            lambda _id: {"id": "d1", "type_demarche": "constatation_mariage"})
+                            lambda _id: {"id": "d1", "type_demarche": "changement_de_nom"})
         monkeypatch.setattr(gen, "get_commune", lambda _id: pytest.fail("génération lancée"))
-        with pytest.raises(gen.DemarcheSansModele, match="constatation_mariage"):
+        with pytest.raises(gen.DemarcheSansModele, match="changement_de_nom"):
             gen.generer_document("d1")
 
-    def test_le_deces_aussi(self, monkeypatch):
+    def test_une_demarche_inconnue_aussi(self, monkeypatch):
+        # Une démarche publiée dans l'atelier sans modèle de document ne doit
+        # pas se rabattre en silence sur l'extrait de naissance.
         monkeypatch.setattr(gen, "get_dossier",
-                            lambda _id: {"id": "d1", "type_demarche": "declaration_deces"})
+                            lambda _id: {"id": "d1", "type_demarche": "changement_de_nom"})
         with pytest.raises(gen.DemarcheSansModele):
             gen.generer_document("d1")
 
     def test_le_message_dit_quoi_faire(self, monkeypatch):
         monkeypatch.setattr(gen, "get_dossier",
-                            lambda _id: {"id": "d1", "type_demarche": "declaration_deces"})
+                            lambda _id: {"id": "d1", "type_demarche": "changement_de_nom"})
         with pytest.raises(gen.DemarcheSansModele, match="hors de l'application"):
             gen.generer_document("d1")
 
