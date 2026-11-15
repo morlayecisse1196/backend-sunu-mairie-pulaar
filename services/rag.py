@@ -15,12 +15,20 @@ from __future__ import annotations
 
 import asyncio
 
+from services import pulaar
 from services.journal import obtenir_logger
 
 log = obtenir_logger("rag")
 
 
 def _rechercher_sync(question: str, commune: str | None, limite: int) -> list:
+    # Les termes pulaar validés sont remplacés par leur équivalent français
+    # AVANT l'encodage : le modèle d'embeddings ne connaît pas le pulaar, et
+    # une demande explicite y tombait dans la même bande que les salutations
+    # (cf. SEUIL_CONFIANCE plus bas, et services/pulaar.vers_francais pour les
+    # mesures). La question du citoyen n'est pas modifiée ailleurs : on ne
+    # réécrit que ce qui part à la recherche.
+    question = pulaar.vers_francais(question)
     try:
         from search2 import search_demarches as recherche_semantique
 

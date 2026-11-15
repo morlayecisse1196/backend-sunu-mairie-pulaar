@@ -204,6 +204,54 @@ def bloc_glossaire() -> str:
     )
 
 
+#: Pulaar -> français, les termes les plus longs d'abord : « deftere wulngo »
+#: doit être reconnu avant « deftere », sans quoi il resterait « document
+#: wulngo », moitié traduit et deux fois moins reconnaissable.
+_VERS_FRANCAIS: tuple[tuple[re.Pattern[str], str], ...] = ()
+
+
+def vers_francais(texte: str) -> str:
+    """
+    Remplace les termes pulaar VALIDÉS par leur équivalent français.
+
+    POURQUOI, ET CE QUE ÇA CHANGE
+
+    La recherche sémantique encode la question du citoyen avec un modèle
+    multilingue qui ne connaît pas le pulaar. `services/rag.py` l'a mesuré et
+    le documente : une vraie demande en pulaar tombe dans la même bande de
+    similarité que les salutations, si bien que le prompt annonce au modèle que
+    l'information trouvée est « probablement SANS RAPPORT » — à propos d'une
+    demande parfaitement explicite.
+
+    Mesuré sur la base de production, avant / après cette réécriture :
+
+        « deftere wulngo »          0,466 -> 0,766
+        « mi yiɗi deftere wulngo »  0,439 -> 0,708
+        « deftere dewgal »          0,366 -> 0,853
+        « jam tan »     (salutation) 0,376 -> 0,376
+        « jaaraama »    (merci)      0,446 -> 0,446
+
+    Les vraies demandes passent au-dessus du seuil de confiance (0,55), les
+    salutations restent dessous : les deux bandes deviennent disjointes, ce que
+    `rag.py` décrivait comme le vrai correctif. Et sans appel distant — seul
+    le vocabulaire déjà relu du projet est employé.
+
+    N'est utilisé que pour CHERCHER. Ni l'affichage, ni ce qui est dit, ni ce
+    qui est enregistré ne passent par ici : le citoyen a parlé pulaar, et c'est
+    son message qui reste au dossier.
+    """
+    global _VERS_FRANCAIS
+    if not _VERS_FRANCAIS:
+        _VERS_FRANCAIS = tuple(
+            (re.compile(r"(?<!\w)" + re.escape(t.pulaar) + r"(?!\w)", re.IGNORECASE), t.francais)
+            for t in sorted(TERMES, key=lambda t: len(t.pulaar), reverse=True)
+            if t.statut == VALIDE and t.pulaar.lower() != t.francais.lower()
+        )
+    for motif, francais in _VERS_FRANCAIS:
+        texte = motif.sub(francais, texte)
+    return texte
+
+
 def bloc_comprehension() -> str:
     """
     Le glossaire dans l'AUTRE SENS : pour COMPRENDRE le citoyen.
