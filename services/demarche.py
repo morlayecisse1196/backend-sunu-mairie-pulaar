@@ -518,7 +518,7 @@ _REPLI_PHRASES_SYSTEME = {
     "social_patience": "D'accord, prenez votre temps. Je vous écoute.",
     # Dite quand le citoyen parle alors qu'une photo est attendue : son
     # message était jusqu'ici écarté sans un mot.
-    "document_message_entendu": "Je vous ai bien entendu, mais j'ai d'abord besoin de la photo.",
+    "document_message_entendu": "Je vous ai bien entendu.",
 }
 
 
