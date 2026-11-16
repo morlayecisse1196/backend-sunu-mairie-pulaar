@@ -588,6 +588,31 @@ def _resultat(reponse: phrases.Reponse, **reste) -> dict:
     return {"reponse": reponse, "reponse_fr": reponse.francais or None, **reste}
 
 
+def _noter_demande_de_document(etat: dict, resultat: dict) -> dict:
+    """
+    Retient qu'une demande de pièce vient d'être DITE au citoyen.
+
+    `_reponse_pour_etape` prononce la demande en enchaînant sur l'étape
+    suivante, sans passer par la branche document — donc sans toucher au
+    compteur. Le tour d'après croyait alors demander la photo pour la première
+    fois, et en tirait deux conséquences fausses :
+
+      * « je ne l'ai pas » n'était pas écouté (la détection est volontairement
+        désactivée au premier tour, où le message répond encore à la question
+        précédente) — le citoyen devait le dire deux fois ;
+      * ce qu'il disait d'autre n'était pas accusé.
+
+    `max(..., 1)` plutôt qu'une incrémentation : on note que la demande a été
+    faite, sans gonfler le compte de rappels qui mène au garde-fou.
+    """
+    document = resultat.get("document_attendu")
+    if document:
+        compteurs = etat.setdefault("compteurs_echecs", {})
+        cle = f"document:{document}"
+        compteurs[cle] = max(compteurs.get(cle, 0), 1)
+    return resultat
+
+
 def _reponse_pour_etape(etape: dict | None, confirmation: phrases.Phrase | None = None) -> dict:
     """
     Construit le résultat pour ENCHAÎNER sur `etape` (celle qui suit une
@@ -789,12 +814,12 @@ async def _tour_administratif(etat: dict, message: str, headers: dict, contexte:
 
     def enchainer(confirmation: phrases.Phrase | None) -> dict:
         """La question suivante, une fois l'étape courante réglée."""
-        return _reponse_pour_etape(
+        return _noter_demande_de_document(etat, _reponse_pour_etape(
             determiner_etape_courante(
                 etat["slots"], documents_satisfaits, definition_champs, definition_documents, champs_ignores
             ),
             confirmation,
-        )
+        ))
 
     if etape is None:
         return _resultat(
@@ -1108,7 +1133,8 @@ def verifier_document_recu_et_avancer(etat: dict) -> dict | None:
             # autre type, ou doublon) : rien de nouveau à annoncer.
             return None
 
-    resultat = _reponse_pour_etape(etape, confirmation=demarche.phrase_systeme("confirmation_photo"))
+    resultat = _noter_demande_de_document(
+        etat, _reponse_pour_etape(etape, confirmation=demarche.phrase_systeme("confirmation_photo")))
     resultat["cas_particulier_cree"] = False
     resultat["manquants"] = champs_obligatoires_manquants(
         etat["slots"], definition_champs, etat.get("champs_ignores")

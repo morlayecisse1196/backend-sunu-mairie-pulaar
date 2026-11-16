@@ -321,3 +321,74 @@ class TestCeQuiEstDitPendantQuOnAttendUnePhoto:
         self._tour(etat, "")
         self._tour(etat, "Ibrahima Diallo")
         assert etat["slots"] == {}
+
+
+class TestLaDemandeDePhotoEmiseParLEnchainement:
+    """
+    L'ordre réel du dialogue : une réponse valide fait enchaîner sur l'étape
+    suivante, et c'est CET enchaînement qui prononce la demande de photo —
+    sans passer par la branche document, donc sans toucher au compteur.
+
+    Le tour d'après croyait alors demander la photo pour la première fois. Deux
+    conséquences, toutes deux observées :
+
+      * « je ne l'ai pas » n'était pas écouté — la détection est désactivée au
+        premier tour, où le message répond encore à la question précédente ;
+      * ce que le citoyen disait d'autre n'était pas accusé.
+    """
+
+    CHAMP_PUIS_DOCUMENT = [{
+        "nom_champ": "nom_enfant", "type_valeur": "texte", "ordre": 10,
+        "question": "Quel est le nom de l'enfant ?", "obligatoire": True, "relances": [],
+    }]
+
+    @pytest.fixture
+    def demarche_mixte(self, monkeypatch):
+        monkeypatch.setattr(slot_controller, "charger_definition_demarche",
+                            lambda _t, _v=None: self.CHAMP_PUIS_DOCUMENT)
+        monkeypatch.setattr(slot_controller, "charger_documents_demarche", lambda _t, _v=None: DOCUMENT)
+        monkeypatch.setattr(regles_demarche, "charger_regles", lambda _t, _v=None: [])
+        monkeypatch.setattr(slot_controller, "list_documents", lambda _id: [])
+
+    def test_le_tour_suivant_sait_que_la_photo_a_deja_ete_demandee(self, demarche_mixte, monkeypatch):
+        async def accepte(_headers, _payload, retries=2):
+            return {"reponse_valide": True, "valeur": "Ibrahima", "reponse": "Noté."}
+
+        monkeypatch.setattr(slot_controller, "_call_openrouter_structured_isole", accepte)
+        etat = {"slots": {}, "type_demarche": "fictive", "dossier_id": None}
+
+        # 1. Le nom est accepté -> l'enchaînement prononce la demande de photo.
+        premier = asyncio.run(slot_controller.traiter_tour_administratif(etat, "Ibrahima", {}))
+        assert premier["document_attendu"] == "certificat_naissance"
+        assert etat["compteurs_echecs"]["document:certificat_naissance"] >= 1, (
+            "la demande a été dite sans que le compteur le sache"
+        )
+
+        # 2. Le citoyen parle d'autre chose : il doit être accusé.
+        async def pas_de_refus(_type, _message, _headers):
+            return False
+
+        monkeypatch.setattr(slot_controller, "_citoyen_dit_ne_pas_avoir", pas_de_refus)
+        second = asyncio.run(slot_controller.traiter_tour_administratif(etat, "Modou Diallo", {}))
+        assert "entendu" in second["reponse_fr"].lower()
+
+    def test_un_je_ne_lai_pas_est_ecoute_des_la_premiere_fois(self, demarche_mixte, monkeypatch):
+        """Le citoyen ne doit pas avoir à le répéter pour être entendu."""
+        async def accepte(_headers, _payload, retries=2):
+            return {"reponse_valide": True, "valeur": "Ibrahima", "reponse": "Noté."}
+
+        monkeypatch.setattr(slot_controller, "_call_openrouter_structured_isole", accepte)
+        etat = {"slots": {}, "type_demarche": "fictive", "dossier_id": None}
+        asyncio.run(slot_controller.traiter_tour_administratif(etat, "Ibrahima", {}))
+
+        demande = []
+
+        async def dit_ne_pas_avoir(_type, message, _headers):
+            demande.append(message)
+            return True
+
+        monkeypatch.setattr(slot_controller, "_citoyen_dit_ne_pas_avoir", dit_ne_pas_avoir)
+        resultat = asyncio.run(
+            slot_controller.traiter_tour_administratif(etat, "je ne l'ai pas", {}))
+        assert demande, "la détection n'a même pas été consultée"
+        assert resultat["cas_particulier_cree"] is True
