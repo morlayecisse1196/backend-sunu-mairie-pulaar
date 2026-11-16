@@ -704,7 +704,8 @@ def _resultat_blocage(violation: regles_demarche.Violation) -> dict:
     )
 
 
-async def _tour_administratif(etat: dict, message: str, headers: dict, contexte: dict) -> dict:
+async def _tour_administratif(etat: dict, message: str, headers: dict, contexte: dict,
+                              sans_interpreter: bool = False) -> dict:
     """
     Orchestrateur complet du mode administratif (plan §1) — destiné à
     remplacer, en Tâche J.5, le bloc `elif etat["mode"] == "administratif":`
@@ -867,7 +868,26 @@ async def _tour_administratif(etat: dict, message: str, headers: dict, contexte:
     champ = etape["definition"]
     nom_champ = champ["nom_champ"]
 
-    # --- D'abord : est-ce seulement de la politesse ? ------------------
+    # --- Rien à interpréter dans ce message ? --------------------------
+    #
+    # Au moment où le citoyen accepte de commencer, le moteur rejoue son
+    # message ici. C'est voulu : « je veux un extrait pour mon fils de sept
+    # jours » contient déjà la première réponse. Mais sur un simple « eey »,
+    # il n'y a rien à extraire — et le modèle jugeait alors la réponse
+    # invalide, si bien que la PREMIÈRE question de chaque démarche arrivait
+    # précédée de « Je n'ai pas bien compris ».
+    #
+    # L'appelant sait distinguer les deux cas (intentions.est_confirmation_seule).
+    # Ici on se contente de poser la question, sans excuse et sans compteur.
+    if sans_interpreter:
+        return _resultat(
+            phrases.reponse(demarche.question_champ(champ)),
+            document_attendu=None,
+            phase_suivante="collecte",
+            cas_particulier_cree=False,
+        )
+
+    # --- Ensuite : est-ce seulement de la politesse ? ------------------
     #
     # « Bonjour », « merci », « attends », « répète » ne répondent pas au
     # champ, et le modèle les jugeait donc invalides : l'agent répondait « Je
@@ -994,7 +1014,8 @@ async def _tour_administratif(etat: dict, message: str, headers: dict, contexte:
     return resultat
 
 
-async def traiter_tour_administratif(etat: dict, message: str, headers: dict) -> dict:
+async def traiter_tour_administratif(etat: dict, message: str, headers: dict,
+                                     sans_interpreter: bool = False) -> dict:
     """
     Le tour administratif, plus l'avancement dans la démarche.
 
@@ -1005,7 +1026,7 @@ async def traiter_tour_administratif(etat: dict, message: str, headers: dict) ->
     d'avancement à montrer.
     """
     contexte: dict = {}
-    resultat = await _tour_administratif(etat, message, headers, contexte)
+    resultat = await _tour_administratif(etat, message, headers, contexte, sans_interpreter)
     if "documents_satisfaits" in contexte:
         resultat["manquants"] = champs_obligatoires_manquants(
             etat["slots"], contexte["definition_champs"], contexte["champs_ignores"]

@@ -39,6 +39,11 @@ class Espion:
         self.resultat_document = None
         self.demarches_demarrees = []
         self.prompts = []
+        #: Ce que le moteur a dit au collecteur : « ce message porte-t-il
+        #: quelque chose à lire ? » Un « oui » qui lance la démarche n'en
+        #: porte rien, et l'interpréter faisait répondre « Je n'ai pas bien
+        #: compris » à la première question.
+        self.sans_interpreter = []
 
     def deps(self):
         espion = self
@@ -52,7 +57,11 @@ class Espion:
                 return espion.analyse_correction
             return espion.analyse_information
 
-        async def tour_administratif(etat, message):
+        # `sans_interpreter` dit au collecteur qu'il n'y a rien à lire dans ce
+        # message — un simple « oui » qui lance la démarche. L'espion le note
+        # pour que les tests puissent le vérifier.
+        async def tour_administratif(etat, message, sans_interpreter=False):
+            espion.sans_interpreter.append(sans_interpreter)
             return espion.resultat_collecte
 
         async def transition(dossier_id, statut, **kwargs):

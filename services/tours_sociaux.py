@@ -142,6 +142,22 @@ def _sequence_presente(mots: list[str], formule: tuple[str, ...]) -> Optional[tu
     return None
 
 
+def est_sans_substance(texte: str) -> bool:
+    """
+    Vrai si le texte ne porte aucune information : que du remplissage ou des
+    mots de politesse, aucun chiffre, aucun mot porteur.
+
+    Sert à répondre à la question « ce message dit-il AUTRE CHOSE que la
+    formule qu'on vient d'y reconnaître ? ». Un « oui » tout seul n'ajoute
+    rien ; « oui, il a trois jours » ajoute une réponse qu'il serait grave de
+    jeter.
+    """
+    return all(
+        not mot.isdigit() and (mot in _REMPLISSAGE or mot in _MOTS_DE_FORMULE)
+        for mot in _normaliser(texte)
+    )
+
+
 def classer(message: str) -> Optional[str]:
     """
     La nature du tour, ou `None` si le message porte autre chose.

@@ -24,6 +24,7 @@ import pytest
 
 import slot_controller
 from services import regles_demarche, tours_sociaux
+from temps_reel import intentions
 
 CHAMPS = [
     {"nom_champ": "age_enfant", "type_valeur": "age", "ordre": 10,
@@ -98,15 +99,17 @@ class TestCeQuiNeDoitJAMAISEtreAvale:
         ) is None
 
 
+@pytest.fixture
+def demarche_en_place(monkeypatch):
+    """Une démarche d'un seul champ, sans base ni réseau."""
+    monkeypatch.setattr(slot_controller, "charger_definition_demarche", lambda _t, _v=None: CHAMPS)
+    monkeypatch.setattr(slot_controller, "charger_documents_demarche", lambda _t, _v=None: [])
+    monkeypatch.setattr(regles_demarche, "charger_regles", lambda _t, _v=None: [])
+    monkeypatch.setattr(slot_controller, "list_documents", lambda _id: [])
+
+
 class TestDansLeDialogue:
     """Le comportement complet : ce que l'agent dit, et ce qu'il NE compte pas."""
-
-    @pytest.fixture
-    def demarche_en_place(self, monkeypatch):
-        monkeypatch.setattr(slot_controller, "charger_definition_demarche", lambda _t, _v=None: CHAMPS)
-        monkeypatch.setattr(slot_controller, "charger_documents_demarche", lambda _t, _v=None: [])
-        monkeypatch.setattr(regles_demarche, "charger_regles", lambda _t, _v=None: [])
-        monkeypatch.setattr(slot_controller, "list_documents", lambda _id: [])
 
     def _tour(self, etat, message, monkeypatch, *, llm_appele=None):
         async def llm_interdit(_headers, _payload, retries=2):
@@ -166,3 +169,94 @@ class TestDansLeDialogue:
         monkeypatch.setattr(slot_controller, "_call_openrouter_structured_isole", faux_llm)
         asyncio.run(slot_controller.traiter_tour_administratif(self._etat(), "Il a trois jours", {}))
         assert vu, "une vraie réponse doit être soumise au modèle"
+
+
+class TestLaPremiereQuestionNeSexcusePas:
+    """
+    La remarque d'origine du terrain : « si l'agent dit "Je n'ai pas compris.
+    Quel âge a votre enfant", ce n'est pas normal ».
+
+    Cause trouvée en jouant le dialogue : au moment où le citoyen accepte de
+    commencer, le moteur rejoue SON message dans le collecteur de champs.
+    C'est voulu — « je veux un extrait pour mon fils de sept jours » contient
+    déjà la première réponse. Mais sur un simple « eey », il n'y a rien à
+    extraire : le modèle jugeait la réponse invalide, et la toute PREMIÈRE
+    question de chaque démarche arrivait précédée d'excuses.
+    """
+
+    @pytest.mark.parametrize("message", ["oui", "eey", "eyyi", "ok", "oui merci", "bonjour oui"])
+    def test_un_accord_nu_est_reconnu(self, message):
+        assert intentions.est_confirmation_seule(message) is True
+
+    @pytest.mark.parametrize("message", [
+        "oui il a trois jours",     # porte la réponse : surtout ne pas la jeter
+        "oui, c'est Awa",
+        "non",
+        "alaa",
+        "il a trois jours",
+        "oui mais la date est fausse",
+    ])
+    def test_ce_qui_porte_autre_chose_nest_pas_un_accord_nu(self, message):
+        assert intentions.est_confirmation_seule(message) is False
+
+    def test_le_collecteur_pose_la_question_sans_sexcuser(self, demarche_en_place, monkeypatch):
+        async def llm_interdit(_headers, _payload, retries=2):
+            pytest.fail("le modèle a été appelé alors qu'il n'y avait rien à lire")
+
+        monkeypatch.setattr(slot_controller, "_call_openrouter_structured_isole", llm_interdit)
+        etat = {"slots": {}, "type_demarche": "fictive", "dossier_id": None}
+        resultat = asyncio.run(
+            slot_controller.traiter_tour_administratif(etat, "oui", {}, True))
+
+        assert "Quel âge a votre enfant" in resultat["reponse_fr"]
+        assert "pas compris" not in resultat["reponse_fr"].lower()
+        assert not (etat.get("compteurs_echecs") or {}).get("age_enfant")
+
+    def test_sans_le_drapeau_le_message_est_bien_interprete(self, demarche_en_place, monkeypatch):
+        """Le chemin normal ne change pas : un vrai message part au modèle."""
+        vu = []
+
+        async def faux_llm(_headers, _payload, retries=2):
+            vu.append(True)
+            return {"reponse_valide": True, "valeur": {"valeur": 3, "unite": "jours"}, "reponse": "Noté."}
+
+        monkeypatch.setattr(slot_controller, "_call_openrouter_structured_isole", faux_llm)
+        etat = {"slots": {}, "type_demarche": "fictive", "dossier_id": None}
+        asyncio.run(slot_controller.traiter_tour_administratif(etat, "trois jours", {}, False))
+        assert vu
+
+
+class TestUnChampOuiNonAccepteToujoursOui:
+    """
+    Le garde-fou qui compte. `sans_interpreter` n'est posé qu'à la bascule,
+    jamais en pleine collecte : sinon « oui » cesserait d'être une réponse
+    valable pour un champ booléen — « Les parents sont-ils mariés ? » — et la
+    correction aurait cassé la moitié des démarches.
+    """
+
+    CHAMP_BOOLEEN = [{
+        "nom_champ": "parents_maries", "type_valeur": "booleen", "ordre": 10,
+        "question": "Les parents sont-ils mariés ?", "obligatoire": True, "relances": [],
+    }]
+
+    def test_oui_reste_une_reponse(self, monkeypatch):
+        monkeypatch.setattr(slot_controller, "charger_definition_demarche",
+                            lambda _t, _v=None: self.CHAMP_BOOLEEN)
+        monkeypatch.setattr(slot_controller, "charger_documents_demarche", lambda _t, _v=None: [])
+        monkeypatch.setattr(regles_demarche, "charger_regles", lambda _t, _v=None: [])
+        monkeypatch.setattr(slot_controller, "list_documents", lambda _id: [])
+
+        async def faux_llm(_headers, _payload, retries=2):
+            return {"reponse_valide": True, "valeur": True, "reponse": "Noté."}
+
+        monkeypatch.setattr(slot_controller, "_call_openrouter_structured_isole", faux_llm)
+        etat = {"slots": {}, "type_demarche": "fictive", "dossier_id": None}
+        asyncio.run(slot_controller.traiter_tour_administratif(etat, "oui", {}))
+        assert etat["slots"]["parents_maries"] is True
+
+    def test_tours_sociaux_nintercepte_pas_un_oui(self):
+        # « oui » n'est ni une salutation ni un remerciement : il doit
+        # traverser le tri social intact.
+        assert tours_sociaux.classer("oui") is None
+        assert tours_sociaux.classer("eey") is None
+        assert tours_sociaux.classer("non") is None

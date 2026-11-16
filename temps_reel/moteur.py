@@ -36,7 +36,7 @@ from services import demarche, evenements, llm, phrases, rag
 from services.corrections import SEUIL_ITERATIONS_CORRECTION_BLOQUE as SEUIL_CORRECTIONS
 from services.journal import obtenir_logger
 from temps_reel.etat import ajouter_historique
-from temps_reel.intentions import classer_confirmation
+from temps_reel.intentions import classer_confirmation, est_confirmation_seule
 from temps_reel.prompts_dialogue import (
     SCHEMA_CORRECTION_RELECTURE,
     SYSTEM_PROMPT_CORRECTION_RELECTURE,
@@ -59,9 +59,11 @@ MESSAGE_BLOCAGE = (
 MESSAGE_REPETER = "Excusez-moi, je n'ai pas bien compris. Pouvez-vous répéter, s'il vous plaît ?"
 
 
-async def _tour_administratif_isole(etat: dict, message: str) -> dict:
+async def _tour_administratif_isole(etat: dict, message: str, sans_interpreter: bool = False) -> dict:
     entetes = {"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"}
-    return await asyncio.to_thread(lambda: asyncio.run(slot_controller.traiter_tour_administratif(etat, message, entetes)))
+    return await asyncio.to_thread(
+        lambda: asyncio.run(
+            slot_controller.traiter_tour_administratif(etat, message, entetes, sans_interpreter)))
 
 
 @dataclass
@@ -109,7 +111,13 @@ async def traiter_message(etat: dict, message: str, deps: Optional[Dependances] 
         resultat_information = await _tour_information(etat, message, deps)
         if resultat_information is not None:
             return _conclure(etat, resultat_information)
-        resultat = await _tour_collecte(etat, message, deps)  # bascule confirmée : même message
+        # Bascule confirmée : on rejoue le MÊME message, parce qu'il contient
+        # souvent déjà la première réponse (« je veux un extrait pour mon fils
+        # de sept jours »). Mais s'il n'est qu'un accord — « oui », « eey » —
+        # il n'y a rien à y lire, et l'interpréter faisait répondre « Je n'ai
+        # pas bien compris » à la toute première question de la démarche.
+        resultat = await _tour_collecte(
+            etat, message, deps, sans_interpreter=est_confirmation_seule(message))
     elif etat.get("phase") == "relecture_en_cours":
         resultat = await _tour_relecture(etat, message, deps)
     else:
@@ -261,8 +269,9 @@ async def _tour_information(etat: dict, message: str, deps: Dependances) -> Opti
     return None
 
 
-async def _tour_collecte(etat: dict, message: str, deps: Dependances) -> ResultatTour:
-    resultat = await deps.tour_administratif(etat, message)
+async def _tour_collecte(etat: dict, message: str, deps: Dependances,
+                         sans_interpreter: bool = False) -> ResultatTour:
+    resultat = await deps.tour_administratif(etat, message, sans_interpreter)
     morceaux = resultat.get("reponse")
     reponse = resultat.get("reponse_fr") or ""
     document = _noter_document_attendu(etat, resultat.get("document_attendu"))

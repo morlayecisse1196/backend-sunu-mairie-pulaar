@@ -96,3 +96,41 @@ def classer_confirmation(message: str | None) -> Confirmation:
 def est_reponse_affirmative(message: str | None) -> bool:
     """Compatibilité avec l'ancienne API (main.py, scripts de test) : vrai uniquement pour un « oui » net."""
     return classer_confirmation(message) == "oui"
+
+
+def est_confirmation_seule(message: str | None) -> bool:
+    """
+    Vrai si le message n'est RIEN D'AUTRE qu'un accord : « oui », « eey »,
+    « d'accord », éventuellement entourés de politesse.
+
+    POURQUOI CETTE NUANCE
+
+    Au moment où le citoyen accepte de commencer une démarche, le moteur
+    rejoue SON MESSAGE dans le collecteur de champs. L'intention est bonne :
+    « je veux un extrait pour mon fils de sept jours » contient déjà la
+    première réponse, et la redemander serait absurde.
+
+    Mais sur un simple « eey », il n'y a rien à extraire. Le modèle jugeait
+    donc la réponse invalide, et la PREMIÈRE question de chaque démarche
+    arrivait précédée d'excuses :
+
+        citoyen : « eey »
+        agent   : « Je n'ai pas bien compris. Quel âge a votre enfant ? »
+
+    `classer_confirmation` ne suffit pas à distinguer les deux cas : elle
+    répond « oui » dès qu'un marqueur affirmatif apparaît, y compris dans
+    « oui, il a trois jours ». On exige donc qu'il ne reste RIEN de
+    substantiel une fois les marqueurs retirés.
+    """
+    if classer_confirmation(message) != "oui":
+        return False
+
+    texte = normaliser(message)
+    for expression in MOTS_REPONSE_AFFIRMATIVE + EXPRESSIONS_AFFIRMATIVES_AVEC_NEGATION:
+        texte = re.sub(rf"(?<![\w']){re.escape(normaliser(expression))}(?![\w])", " ", texte)
+
+    # Importé ici : `services` ne connaît pas `temps_reel`, et l'inverse doit
+    # le rester — l'import local garde la dépendance à sens unique.
+    from services.tours_sociaux import est_sans_substance
+
+    return est_sans_substance(texte)
