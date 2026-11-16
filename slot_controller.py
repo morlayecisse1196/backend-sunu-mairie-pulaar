@@ -854,8 +854,30 @@ async def _tour_administratif(etat: dict, message: str, headers: dict, contexte:
 
         demande = demarche.message_document(groupe[0], tentative=tentatives_precedentes)
         demande = _eviter_repetition(etat, cle, demande)
+
+        # --- Dire qu'on a entendu, même si ce n'est pas ce qu'on attend ----
+        #
+        # Pendant l'attente d'une photo, tout ce que dit le citoyen était
+        # écarté EN SILENCE : il entendait la demande de photo se répéter,
+        # sans le moindre signe qu'on l'avait écouté. Observé en jouant le
+        # dialogue — « Ibrahima Diallo » n'a reçu aucun accusé, et ce nom est
+        # tombé dans le vide.
+        #
+        # On ne tente PAS d'en extraire une valeur : le dialogue traite une
+        # information à la fois, et deviner à quel champ ce message répondrait
+        # reviendrait sur cette discipline. On dit seulement qu'on l'a entendu,
+        # et qu'il faut la photo d'abord.
+        #
+        # Au PREMIER tour sur ce document, le message répond encore à la
+        # question précédente, pas à la demande de photo : rien à accuser.
+        # Et une simple politesse n'appelle pas cet accusé — elle a déjà sa
+        # réponse ailleurs.
+        entendu = None
+        if tentatives_precedentes >= 1 and message and not tours_sociaux.est_sans_substance(message):
+            entendu = demarche.phrase_systeme("document_message_entendu")
+
         return _resultat(
-            phrases.reponse(demande),
+            phrases.reponse(entendu, demande),
             document_attendu=type_principal,
             phase_suivante="collecte",
             cas_particulier_cree=False,

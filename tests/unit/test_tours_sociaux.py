@@ -260,3 +260,64 @@ class TestUnChampOuiNonAccepteToujoursOui:
         assert tours_sociaux.classer("oui") is None
         assert tours_sociaux.classer("eey") is None
         assert tours_sociaux.classer("non") is None
+
+
+DOCUMENT = [{"type_document": "certificat_naissance", "obligatoire": True, "ordre": 20,
+             "message_demande": "Envoyez-moi la photo du certificat de naissance."}]
+
+
+class TestCeQuiEstDitPendantQuOnAttendUnePhoto:
+    """
+    Pendant l'attente d'une pièce, tout ce que disait le citoyen était écarté
+    EN SILENCE. Observé en jouant le dialogue : à la demande de photo, le
+    citoyen répond « Ibrahima Diallo » — et l'agent se contente de redemander
+    la photo. Ce nom tombe dans le vide, et le citoyen croit avoir été entendu.
+    """
+
+    @pytest.fixture
+    def attente_de_photo(self, monkeypatch):
+        monkeypatch.setattr(slot_controller, "charger_definition_demarche", lambda _t, _v=None: [])
+        monkeypatch.setattr(slot_controller, "charger_documents_demarche", lambda _t, _v=None: DOCUMENT)
+        monkeypatch.setattr(regles_demarche, "charger_regles", lambda _t, _v=None: [])
+        monkeypatch.setattr(slot_controller, "list_documents", lambda _id: [])
+
+        async def pas_de_refus(_type, _message, _headers):
+            return False
+
+        monkeypatch.setattr(slot_controller, "_citoyen_dit_ne_pas_avoir", pas_de_refus)
+
+    def _tour(self, etat, message):
+        return asyncio.run(slot_controller.traiter_tour_administratif(etat, message, {}))
+
+    def test_le_premier_tour_ne_dit_rien_de_plus(self, attente_de_photo):
+        # À ce moment-là le message répond encore à la question PRÉCÉDENTE,
+        # pas à la demande de photo qui vient d'être posée.
+        etat = {"slots": {}, "type_demarche": "fictive", "dossier_id": None}
+        resultat = self._tour(etat, "Ibrahima Diallo")
+        assert "entendu" not in resultat["reponse_fr"].lower()
+
+    def test_ensuite_lagent_dit_quil_a_entendu(self, attente_de_photo):
+        etat = {"slots": {}, "type_demarche": "fictive", "dossier_id": None}
+        self._tour(etat, "")                       # 1er tour : la photo est demandée
+        resultat = self._tour(etat, "Ibrahima Diallo")
+        assert "entendu" in resultat["reponse_fr"].lower()
+        # La demande de photo reste : c'est toujours elle qu'on attend.
+        assert "photo" in resultat["reponse_fr"].lower()
+
+    def test_une_simple_politesse_nappelle_pas_cet_accuse(self, attente_de_photo):
+        etat = {"slots": {}, "type_demarche": "fictive", "dossier_id": None}
+        self._tour(etat, "")
+        resultat = self._tour(etat, "merci")
+        assert "entendu" not in resultat["reponse_fr"].lower()
+
+    def test_aucune_valeur_nest_devinee(self, attente_de_photo):
+        """
+        On accuse réception, on n'extrait rien : deviner à quel champ ce
+        message répondrait reviendrait sur la discipline « une information à
+        la fois », au risque d'écrire un nom d'enfant dans la case du
+        déclarant.
+        """
+        etat = {"slots": {}, "type_demarche": "fictive", "dossier_id": None}
+        self._tour(etat, "")
+        self._tour(etat, "Ibrahima Diallo")
+        assert etat["slots"] == {}
