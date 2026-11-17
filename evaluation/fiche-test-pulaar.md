@@ -71,13 +71,19 @@ relecture du mariage et du décès.
 phrases. L'audio arrive au fil de l'eau, donc la première phrase se fait
 entendre bien avant la fin. Au second passage, le cache la rend immédiate.
 
-**Deux défauts connus, non corrigés :**
+**Un défaut connu, non corrigé :** `Mi alaa ngal` vient du traducteur, pas
+d'une relecture. Il est compris, mais un locuteur devrait confirmer la
+formulation.
 
-* la proposition de démarche est dite **deux fois**, et la seconde vouvoie :
-  « Veux-tu commencer… ? *Je vais vous aider pour : Extrait de naissance.
-  Voulez-vous que nous commencions maintenant ?* » ;
-* `Mi alaa ngal` vient du traducteur, pas d'une relecture. Il est compris, mais
-  un locuteur devrait confirmer la formulation.
+**Corrigé le 17 novembre, à vérifier au passage :**
+
+* la proposition de démarche n'est plus dite qu'**une fois**, par l'agent, qui
+  nomme la démarche : « Je vais vous aider pour : Extrait de naissance.
+  Voulez-vous que nous commencions maintenant ? ». Le modèle ne la pose plus
+  lui-même ;
+* **n'importe quelle façon de dire oui** doit lancer la collecte sans excuse —
+  `Eey`, mais aussi `Eyyi mbiɗo yiɗi ɗe`. Si « Je n'ai pas bien compris »
+  revient à ce moment-là, dites-le moi.
 
 ---
 
