@@ -44,3 +44,6 @@ Thumbs.db
 # --- Notes personnelles de déploiement (contiennent des mots de passe réels) ---
 SECURISATION_VPS.md
 doc_vps_hostinger.md
+
+# --- Traductions mises en cache (texte produit par le modèle, pas du code) ---
+cache_traductions/

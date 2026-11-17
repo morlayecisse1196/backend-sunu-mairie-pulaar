@@ -18,7 +18,7 @@ import re
 from typing import Awaitable, Callable, Optional, Protocol
 
 from prompts import SYSTEM_PROMPT_FORMATTER, build_formatter_prompt
-from services import catalogue_audio, llm
+from services import catalogue_audio, llm, traductions
 from services import phrases as services_phrases
 from services.journal import obtenir_logger
 from tts_client import TTSError, synthesize_remote
@@ -193,20 +193,41 @@ async def dire(
                 else:
                     planifier(texte, ranger=True)
         else:
+            invite = build_formatter_prompt(contexte_question, texte_fr, premier_tour=premier_tour)
             messages = [
                 {"role": "system", "content": SYSTEM_PROMPT_FORMATTER},
-                {"role": "user", "content": build_formatter_prompt(
-                    contexte_question, texte_fr, premier_tour=premier_tour)},
+                {"role": "user", "content": invite},
             ]
-            async for delta in flux_traduction(messages, temperature=0.3):
-                pulaar += delta
-                tampon += delta
-                await emetteur.envoyer_json({"type": "stream_pulaar", "content": delta, "turn_id": turn_id})
-                phrases_completes, tampon = extraire_phrases_completes(tampon)
+            cle_traduction = traductions.cle(SYSTEM_PROMPT_FORMATTER, invite)
+            deja_traduit = traductions.lire(cle_traduction)
+
+            if deja_traduit is not None:
+                # Déjà traduit à l'identique : on n'appelle pas le modèle. Le
+                # pulaar est le MÊME qu'à la fois précédente, donc le cache
+                # audio retombe sur ses fichiers et plus rien n'est
+                # resynthétisé.
+                pulaar = deja_traduit
+                await emetteur.envoyer_json(
+                    {"type": "stream_pulaar", "content": pulaar, "turn_id": turn_id})
+                phrases_completes, reste = extraire_phrases_completes(pulaar)
                 for phrase in phrases_completes:
-                    planifier(phrase)
-            if tampon.strip():
-                planifier(tampon.strip())
+                    planifier(phrase, ranger=True)
+                if reste.strip():
+                    planifier(reste.strip(), ranger=True)
+            else:
+                # temperature=0 : le modèle reste libre de sa formulation, mais
+                # il ne tire plus au sort entre plusieurs. C'est la première
+                # moitié de la stabilité ; le cache ci-dessus est la seconde.
+                async for delta in flux_traduction(messages, temperature=0.0):
+                    pulaar += delta
+                    tampon += delta
+                    await emetteur.envoyer_json({"type": "stream_pulaar", "content": delta, "turn_id": turn_id})
+                    phrases_completes, tampon = extraire_phrases_completes(tampon)
+                    for phrase in phrases_completes:
+                        planifier(phrase, ranger=True)
+                if tampon.strip():
+                    planifier(tampon.strip(), ranger=True)
+                traductions.ranger(cle_traduction, pulaar)
         file_audio.put_nowait(None)
         await tache_envoi
         return pulaar

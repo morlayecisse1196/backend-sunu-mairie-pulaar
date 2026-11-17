@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import pytest
 
-from services import catalogue_audio, demarche
+from services import catalogue_audio, demarche, traductions
 
 
 @pytest.fixture(autouse=True)
@@ -39,3 +39,19 @@ def _cache_audio_isole(monkeypatch, tmp_path):
     dépendrait alors de l'ordre d'exécution.
     """
     monkeypatch.setattr(catalogue_audio, "DOSSIER_PHRASES", str(tmp_path / "phrases"))
+
+
+@pytest.fixture(autouse=True)
+def _cache_traductions_isole(monkeypatch, tmp_path):
+    """
+    Chaque test a son propre cache de traductions.
+
+    Sans cela, une traduction rangée par un test est RELUE par le suivant dès
+    que la demande est identique — et le second ne passe plus par son propre
+    faux traducteur. C'est arrivé : deux tests de `test_parole.py` emploient
+    le même `texte_fr`, et le second recevait le pulaar du premier.
+
+    Même raison que pour l'audio pré-généré ci-dessus, avec en plus le fait
+    qu'un cache non isolé laisse un dossier dans le dépôt.
+    """
+    monkeypatch.setattr(traductions, "DOSSIER", str(tmp_path / "traductions"))
