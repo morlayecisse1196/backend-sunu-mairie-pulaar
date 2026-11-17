@@ -93,15 +93,19 @@ PROPOSER DE COMMENCER LA DÉMARCHE (champ `propose_demarrer_demarche`) :
 - « NON » : informe normalement, oriente vers la mairie, et mets
   `propose_demarrer_demarche=false`. Proposer une démarche que tu ne sais pas mener
   enverrait le citoyen dans un dialogue qui n'existe pas.
-- « OUI » : termine ta réponse par une question claire proposant de commencer, mets
-  `propose_demarrer_demarche=true`, et recopie dans `demarche_proposee` le nom EXACT
-  indiqué à côté de « OUI ». L'agent redira ensuite lui-même le nom de la démarche avant
-  de la commencer : inutile d'insister, une seule question suffit.
+- « OUI » : mets `propose_demarrer_demarche=true` et recopie dans `demarche_proposee`
+  le nom EXACT indiqué à côté de « OUI ». Mais N'ÉCRIS PAS LA QUESTION TOI-MÊME :
+  ne propose pas de commencer, ne demande pas si le citoyen le souhaite, ne termine
+  ni par « Veux-tu que nous commencions… ? » ni par « je peux t'aider à commencer ».
+  Arrête-toi après l'information. C'est l'agent qui pose la question juste après ta
+  réponse, en nommant la démarche, dans une phrase fixe dont le pulaar est relu par
+  un locuteur. Si tu la poses aussi, le citoyen l'entend deux fois de suite.
 
 CONFIRMATION DU CITOYEN (champ `confirme_demarrage_demarche`) :
 - Regarde l'historique récent fourni ci-dessous. Si le TOUR PRÉCÉDENT de
-  l'assistant proposait déjà de commencer une démarche (question du type
-  ci-dessus), évalue si le message ACTUEL du citoyen exprime un accord clair
+  l'assistant se termine par la question de l'agent qui nomme une démarche
+  (« Je vais vous aider pour : … Voulez-vous que nous commencions maintenant ? »),
+  évalue si le message ACTUEL du citoyen exprime un accord clair
   pour commencer — quelle que soit la langue ou la formulation exacte (le
   citoyen peut répondre en français, en pulaar, ou dans un mélange des deux ;
   évalue le SENS de sa réponse, ne cherche jamais un mot-clé précis).
@@ -135,11 +139,11 @@ SCHEMA_REPONSE_INFORMATION = {
         },
         "propose_demarrer_demarche": {
             "type": "boolean",
-            "description": "true UNIQUEMENT si `reponse` propose explicitement de commencer maintenant l'une des démarches listées dans le prompt utilisateur (et se termine par une question en ce sens). false dans tous les autres cas, notamment pour une démarche absente de cette liste.",
+            "description": "true UNIQUEMENT si le besoin du citoyen relève de l'une des démarches listées dans le prompt utilisateur et qu'elle est réalisable maintenant. C'est un SIGNAL adressé à l'agent, pas une promesse faite dans `reponse` : `reponse` ne doit surtout PAS contenir la question, c'est l'agent qui la pose ensuite. false dans tous les autres cas, notamment pour une démarche absente de cette liste.",
         },
         "demarche_proposee": {
             "type": ["string", "null"],
-            "description": "Le nom EXACT, recopié depuis la liste du prompt utilisateur, de la démarche que `reponse` propose de commencer. null si propose_demarrer_demarche est false.",
+            "description": "Le nom EXACT, recopié depuis la liste du prompt utilisateur, de la démarche reconnue dans le besoin du citoyen. null si propose_demarrer_demarche est false.",
         },
         "confirme_demarrage_demarche": {
             "type": "boolean",
@@ -209,7 +213,8 @@ def build_generator_prompt(question: str, resume_rag: str, history: list = None,
         liste = "\n".join(f"- {d}" for d in demarches_en_ligne)
         historique += (
             "DÉMARCHES QUE L'AGENT SAIT MENER ENTIÈREMENT PAR LA PAROLE (les seules que tu peux "
-            "proposer de commencer maintenant ; recopie le nom exact dans `demarche_proposee`) :\n"
+            "signaler dans `demarche_proposee`, en recopiant le nom exact — sans écrire toi-même "
+            "la question de démarrage, que l'agent pose après toi) :\n"
             f"{liste}\n\n"
         )
 
