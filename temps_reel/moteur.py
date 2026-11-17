@@ -59,11 +59,13 @@ MESSAGE_BLOCAGE = (
 MESSAGE_REPETER = "Excusez-moi, je n'ai pas bien compris. Pouvez-vous répéter, s'il vous plaît ?"
 
 
-async def _tour_administratif_isole(etat: dict, message: str, sans_interpreter: bool = False) -> dict:
+async def _tour_administratif_isole(etat: dict, message: str, sans_interpreter: bool = False,
+                                    echec_silencieux: bool = False) -> dict:
     entetes = {"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"}
     return await asyncio.to_thread(
         lambda: asyncio.run(
-            slot_controller.traiter_tour_administratif(etat, message, entetes, sans_interpreter)))
+            slot_controller.traiter_tour_administratif(
+                etat, message, entetes, sans_interpreter, echec_silencieux)))
 
 
 @dataclass
@@ -113,11 +115,26 @@ async def traiter_message(etat: dict, message: str, deps: Optional[Dependances] 
             return _conclure(etat, resultat_information)
         # Bascule confirmée : on rejoue le MÊME message, parce qu'il contient
         # souvent déjà la première réponse (« je veux un extrait pour mon fils
-        # de sept jours »). Mais s'il n'est qu'un accord — « oui », « eey » —
-        # il n'y a rien à y lire, et l'interpréter faisait répondre « Je n'ai
-        # pas bien compris » à la toute première question de la démarche.
+        # de sept jours »). Mais s'il n'est qu'un accord, il n'y a rien à y
+        # lire, et l'interpréter faisait répondre « Je n'ai pas bien compris »
+        # à la toute première question de la démarche.
+        #
+        # Deux choses, donc, et il faut les deux :
+        #   `sans_interpreter`  — raccourci sur un accord reconnu : on
+        #     n'appelle pas le modèle pour rien. Sa liste de mots est
+        #     française, il ne reconnaît le pulaar qu'en particule nue.
+        #   `echec_silencieux`  — filet pour tout le reste : si l'extracteur
+        #     ne trouve rien dans le message rejoué, on pose simplement la
+        #     question. Le citoyen n'avait pas encore de question devant lui :
+        #     il ne peut pas y avoir « mal répondu ».
+        #
+        # Le second rend le premier inoffensif. Sans lui, « Eyyi mbiɗo yiɗi
+        # ɗe » — un oui pulaar ordinaire — valait au citoyen « Je n'ai pas
+        # bien compris » et un pas de plus vers l'abandon du champ.
         resultat = await _tour_collecte(
-            etat, message, deps, sans_interpreter=est_confirmation_seule(message))
+            etat, message, deps,
+            sans_interpreter=est_confirmation_seule(message),
+            echec_silencieux=True)
     elif etat.get("phase") == "relecture_en_cours":
         resultat = await _tour_relecture(etat, message, deps)
     else:
@@ -270,8 +287,9 @@ async def _tour_information(etat: dict, message: str, deps: Dependances) -> Opti
 
 
 async def _tour_collecte(etat: dict, message: str, deps: Dependances,
-                         sans_interpreter: bool = False) -> ResultatTour:
-    resultat = await deps.tour_administratif(etat, message, sans_interpreter)
+                         sans_interpreter: bool = False,
+                         echec_silencieux: bool = False) -> ResultatTour:
+    resultat = await deps.tour_administratif(etat, message, sans_interpreter, echec_silencieux)
     morceaux = resultat.get("reponse")
     reponse = resultat.get("reponse_fr") or ""
     document = _noter_document_attendu(etat, resultat.get("document_attendu"))

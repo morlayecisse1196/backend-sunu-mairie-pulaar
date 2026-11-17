@@ -392,3 +392,90 @@ class TestLaDemandeDePhotoEmiseParLEnchainement:
             slot_controller.traiter_tour_administratif(etat, "je ne l'ai pas", {}))
         assert demande, "la détection n'a même pas été consultée"
         assert resultat["cas_particulier_cree"] is True
+
+
+class TestUnAccordPulaarNestPasUneIncomprehension:
+    """
+    Le défaut signalé le 2026-11-17, capture d'écran à l'appui.
+
+    Le citoyen accepte de commencer, en pulaar — « Eyyi mbiɗo yiɗi ɗe » — et
+    l'agent lui répond « Je n'ai pas bien compris. Quel âge a votre enfant ? ».
+
+    La cause n'était PAS l'extracteur. Vérifié sur la production le même jour :
+    il rejette proprement « eey », « eyyi mbiɗo yiɗi ɗe » et « oui je veux
+    bien » sur les trois démarches — il ne prend jamais un accord pour une
+    réponse. La cause était la garde en amont, `est_confirmation_seule`, dont
+    la liste de mots vides est française (« je », « le », « bien », « vous »).
+    Les mots pulaar lui paraissent donc porteurs d'information : elle laissait
+    passer, et l'échec de l'extracteur comptait comme une faute du citoyen —
+    excuse à l'écran, et un pas de plus vers l'abandon du champ.
+
+    Le correctif ne touche pas au vocabulaire, qui ne sera jamais complet. À
+    la bascule, et là seulement, un échec d'extraction est SILENCIEUX : le
+    citoyen n'avait pas encore de question devant lui, il ne peut pas y avoir
+    mal répondu.
+    """
+
+    MESSAGES = ["Eyyi mbiɗo yiɗi ɗe", "Eey, mbiɗo yiɗi", "Oui je le veux", "Eey"]
+
+    def _bascule(self, monkeypatch, message):
+        """Le message rejoué à la bascule, extracteur bredouille."""
+        async def bredouille(_headers, _payload, retries=2):
+            return {"reponse_valide": False, "valeur": None,
+                    "reponse": "Ce message ne répond pas à la question."}
+
+        monkeypatch.setattr(slot_controller, "_call_openrouter_structured_isole", bredouille)
+        etat = {"slots": {}, "type_demarche": "fictive", "dossier_id": None}
+        resultat = asyncio.run(slot_controller.traiter_tour_administratif(
+            etat, message, {}, False, True))
+        return etat, resultat
+
+    @pytest.mark.parametrize("message", MESSAGES)
+    def test_lagent_ne_sexcuse_pas(self, message, demarche_en_place, monkeypatch):
+        _etat, resultat = self._bascule(monkeypatch, message)
+        assert "pas compris" not in resultat["reponse_fr"].lower()
+
+    @pytest.mark.parametrize("message", MESSAGES)
+    def test_la_premiere_question_est_posee(self, message, demarche_en_place, monkeypatch):
+        _etat, resultat = self._bascule(monkeypatch, message)
+        assert "Quel âge a votre enfant" in resultat["reponse_fr"]
+
+    @pytest.mark.parametrize("message", MESSAGES)
+    def test_le_compteur_dabandon_ne_bouge_pas(self, message, demarche_en_place, monkeypatch):
+        # Trois réponses jugées invalides abandonnent le champ. Confirmer
+        # poliment ne doit jamais entamer ce budget.
+        etat, _resultat = self._bascule(monkeypatch, message)
+        assert not (etat.get("compteurs_echecs") or {}).get("age_enfant")
+
+    def test_une_vraie_reponse_reste_lue(self, demarche_en_place, monkeypatch):
+        """
+        Le filet ne doit pas aveugler l'extracteur : le raccourci qui fait
+        tout l'intérêt de rejouer le message — « oui, il a trois jours » —
+        continue d'être capté.
+        """
+        async def faux_llm(_headers, _payload, retries=2):
+            return {"reponse_valide": True, "valeur": {"valeur": 3, "unite": "jours"},
+                    "reponse": "Noté."}
+
+        monkeypatch.setattr(slot_controller, "_call_openrouter_structured_isole", faux_llm)
+        etat = {"slots": {}, "type_demarche": "fictive", "dossier_id": None}
+        asyncio.run(slot_controller.traiter_tour_administratif(
+            etat, "oui, il a trois jours", {}, False, True))
+        assert etat["slots"]["age_enfant"]
+
+    def test_en_pleine_collecte_lagent_sexcuse_toujours(self, demarche_en_place, monkeypatch):
+        """
+        Le filet n'est tendu qu'à la bascule. Plus tard, une réponse hors
+        sujet est une vraie incompréhension : le dire est utile, et le
+        compteur DOIT avancer — c'est lui qui finit par passer la main à un
+        agent humain plutôt que de laisser le citoyen tourner en rond.
+        """
+        async def bredouille(_headers, _payload, retries=2):
+            return {"reponse_valide": False, "valeur": None, "reponse": "hors sujet"}
+
+        monkeypatch.setattr(slot_controller, "_call_openrouter_structured_isole", bredouille)
+        etat = {"slots": {}, "type_demarche": "fictive", "dossier_id": None}
+        resultat = asyncio.run(
+            slot_controller.traiter_tour_administratif(etat, "il fait beau aujourd hui", {}))
+        assert etat["compteurs_echecs"]["age_enfant"] == 1
+        assert "compris" in resultat["reponse_fr"].lower()

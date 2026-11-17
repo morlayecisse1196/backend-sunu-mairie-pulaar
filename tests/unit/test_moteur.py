@@ -44,6 +44,10 @@ class Espion:
         #: porte rien, et l'interpréter faisait répondre « Je n'ai pas bien
         #: compris » à la première question.
         self.sans_interpreter = []
+        #: Et : « si tu ne trouves rien, tais-toi ». Posé à la bascule et là
+        #: seulement, parce que le citoyen n'avait pas encore de question
+        #: devant lui — il ne peut donc pas y avoir mal répondu.
+        self.echec_silencieux = []
 
     def deps(self):
         espion = self
@@ -60,8 +64,10 @@ class Espion:
         # `sans_interpreter` dit au collecteur qu'il n'y a rien à lire dans ce
         # message — un simple « oui » qui lance la démarche. L'espion le note
         # pour que les tests puissent le vérifier.
-        async def tour_administratif(etat, message, sans_interpreter=False):
+        async def tour_administratif(etat, message, sans_interpreter=False,
+                                     echec_silencieux=False):
             espion.sans_interpreter.append(sans_interpreter)
+            espion.echec_silencieux.append(echec_silencieux)
             return espion.resultat_collecte
 
         async def transition(dossier_id, statut, **kwargs):
@@ -121,6 +127,10 @@ async def test_bascule_confirmee_cree_le_dossier_et_enchaine_la_collecte(espion,
     assert etat["mode"] == "administratif" and etat["dossier_id"] == "dossier-1"
     assert espion.dossiers_crees == [("citoyen-1", "commune-1")]
     assert resultat.reponse_fr == "Quel âge a votre enfant ?"
+    # Le message rejoué est le « oui » du citoyen. S'il ne porte rien, le
+    # collecteur doit se taire, pas s'excuser : le citoyen n'avait pas encore
+    # de question devant lui.
+    assert espion.echec_silencieux == [True]
     # Étape 2.4 : la version de la démarche est figée au moment où le citoyen
     # s'engage. Sans elle, une publication en cours de dialogue changerait ses
     # questions — y compris après le récapitulatif qu'il vient de confirmer.

@@ -730,7 +730,8 @@ def _resultat_blocage(violation: regles_demarche.Violation) -> dict:
 
 
 async def _tour_administratif(etat: dict, message: str, headers: dict, contexte: dict,
-                              sans_interpreter: bool = False) -> dict:
+                              sans_interpreter: bool = False,
+                              echec_silencieux: bool = False) -> dict:
     """
     Orchestrateur complet du mode administratif (plan §1) — destiné à
     remplacer, en Tâche J.5, le bloc `elif etat["mode"] == "administratif":`
@@ -920,12 +921,13 @@ async def _tour_administratif(etat: dict, message: str, headers: dict, contexte:
     # Au moment où le citoyen accepte de commencer, le moteur rejoue son
     # message ici. C'est voulu : « je veux un extrait pour mon fils de sept
     # jours » contient déjà la première réponse. Mais sur un simple « eey »,
-    # il n'y a rien à extraire — et le modèle jugeait alors la réponse
-    # invalide, si bien que la PREMIÈRE question de chaque démarche arrivait
-    # précédée de « Je n'ai pas bien compris ».
+    # il n'y a rien à extraire, et l'appel au modèle est pure dépense.
     #
-    # L'appelant sait distinguer les deux cas (intentions.est_confirmation_seule).
-    # Ici on se contente de poser la question, sans excuse et sans compteur.
+    # Ce raccourci est une OPTIMISATION, pas un garde-fou : il repose sur
+    # `intentions.est_confirmation_seule`, dont le vocabulaire est français et
+    # qui ne reconnaît donc le pulaar qu'en particule nue. Quand il se trompe,
+    # `echec_silencieux` (plus bas) rattrape — on perd une seconde, pas un
+    # tour de dialogue.
     if sans_interpreter:
         return _resultat(
             phrases.reponse(demarche.question_champ(champ)),
@@ -969,6 +971,25 @@ async def _tour_administratif(etat: dict, message: str, headers: dict, contexte:
     parsed = await _call_openrouter_structured_isole(headers, payload)
 
     if not parsed.get("reponse_valide") or parsed.get("valeur") is None:
+        # Message rejoué à la bascule : « je n'ai rien trouvé » ne veut pas
+        # dire « le citoyen a mal répondu ». Il venait d'accepter de commencer,
+        # il n'avait pas encore de question devant lui. On pose donc la
+        # question, sans excuse et sans compteur.
+        #
+        # C'est ce qui rend le dialogue correct en pulaar SANS dictionnaire :
+        # le juge n'est plus une liste de mots français, c'est l'extracteur
+        # lui-même, qui lit toutes les langues. Mesuré sur la production le
+        # 2026-11-17 : « eey », « eyyi mbiɗo yiɗi ɗe », « oui je veux bien »
+        # sont rejetés par l'extracteur dans les trois démarches — une
+        # confirmation n'est jamais prise pour une réponse.
+        if echec_silencieux:
+            return _resultat(
+                phrases.reponse(demarche.question_champ(champ)),
+                document_attendu=None,
+                phase_suivante="collecte",
+                cas_particulier_cree=False,
+            )
+
         # Le modèle juge que le message ne répond pas à CE champ (ex. le
         # citoyen a parlé d'une autre personne, Tâche J.3). Sa reformulation
         # n'est PLUS dite au citoyen (étape 3) : elle était improvisée, donc
@@ -1062,7 +1083,8 @@ async def _tour_administratif(etat: dict, message: str, headers: dict, contexte:
 
 
 async def traiter_tour_administratif(etat: dict, message: str, headers: dict,
-                                     sans_interpreter: bool = False) -> dict:
+                                     sans_interpreter: bool = False,
+                                     echec_silencieux: bool = False) -> dict:
     """
     Le tour administratif, plus l'avancement dans la démarche.
 
@@ -1073,7 +1095,8 @@ async def traiter_tour_administratif(etat: dict, message: str, headers: dict,
     d'avancement à montrer.
     """
     contexte: dict = {}
-    resultat = await _tour_administratif(etat, message, headers, contexte, sans_interpreter)
+    resultat = await _tour_administratif(etat, message, headers, contexte,
+                                         sans_interpreter, echec_silencieux)
     if "documents_satisfaits" in contexte:
         resultat["manquants"] = champs_obligatoires_manquants(
             etat["slots"], contexte["definition_champs"], contexte["champs_ignores"]
