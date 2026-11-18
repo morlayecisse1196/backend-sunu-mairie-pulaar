@@ -79,3 +79,63 @@ async def test_conversion_opus_vers_wav_16k(tmp_path):
     with wave.open(io.BytesIO(resultat)) as fichier:
         assert fichier.getframerate() == 16000 and fichier.getnchannels() == 1
     assert audio.duree_wav_secondes(resultat) == pytest.approx(1.5, abs=0.1)
+
+
+class TestLesDeuxClientsSontTraitesPareil:
+    """
+    Le mobile enregistre du WAV, le web du WebM/Opus. Avant, cette différence
+    de FORMAT devenait une différence de COMPORTEMENT : au-delà de la limite,
+    le WAV était refusé, et le compressé silencieusement tronqué par le `-t`
+    donné à ffmpeg — qui coupait exactement à la borne du contrôle, si bien
+    que le contrôle ne voyait plus jamais rien dépasser.
+
+    Même geste du citoyen, même réponse : c'est ce que vérifient ces tests.
+    """
+
+    async def test_le_wav_trop_long_est_refuse(self):
+        trop = audio.DUREE_MAX_SECONDES + audio.DUREE_TOLERANCE_SECONDES + 2
+        with pytest.raises(audio.ErreurAudio) as exc:
+            await audio.preparer_pour_asr(_wav(trop))
+        assert exc.value.code == "audio_trop_long"
+
+    @pytest.mark.skipif(audio.chemin_ffmpeg() is None, reason="ffmpeg absent de cette machine")
+    async def test_le_compresse_trop_long_est_refuse_aussi(self, tmp_path):
+        trop = audio.DUREE_MAX_SECONDES + audio.DUREE_TOLERANCE_SECONDES + 2
+        source = tmp_path / "source.wav"
+        source.write_bytes(_wav(trop))
+        opus = tmp_path / "message.ogg"
+        subprocess.run([audio.chemin_ffmpeg(), "-loglevel", "error", "-y", "-i", str(source),
+                        "-c:a", "libopus", str(opus)], check=True)
+
+        with pytest.raises(audio.ErreurAudio) as exc:
+            await audio.preparer_pour_asr(opus.read_bytes())
+        assert exc.value.code == "audio_trop_long"
+
+    async def test_la_duree_acceptee_passe_dans_les_deux_sens(self):
+        # Juste en dessous de la limite : accepté, sans dépendre du format.
+        octets = _wav(audio.DUREE_MAX_SECONDES - 1)
+        assert await audio.preparer_pour_asr(octets) is octets
+
+    def test_ffmpeg_ne_tronque_pas_a_la_limite_du_controle(self):
+        # Le piège précédent : si ffmpeg coupe À la limite, plus rien ne la
+        # dépasse et le contrôle devient décoratif.
+        assert audio.DUREE_COUPURE_FFMPEG_SECONDES > (
+            audio.DUREE_MAX_SECONDES + audio.DUREE_TOLERANCE_SECONDES
+        )
+
+
+def test_le_delai_asr_couvre_la_duree_acceptee():
+    """
+    Les deux bornes doivent rester d'accord. Mesure du 2026-11-17 sur la
+    production : le Space transcrit à ~1,8 fois le temps réel (31,4 s d'audio
+    → 56,0 s de calcul). Un audio que le backend accepte doit tenir dans le
+    délai, sinon le citoyen paie un réessai qu'il n'a pas demandé — 1 min 51
+    d'attente mesurées pour 42,7 s de parole.
+    """
+    import asr_client
+
+    besoin = audio.DUREE_MAX_SECONDES * asr_client.FACTEUR_TEMPS_REEL_MESURE
+    assert asr_client.DELAI_SECONDES > besoin, (
+        "le délai ASR est plus court que le temps de calcul attendu pour la "
+        "durée d'audio acceptée"
+    )

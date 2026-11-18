@@ -6,6 +6,12 @@ lourd en zone rurale (3G/EDGE). Le protocole v2 permet donc au mobile d'envoyer
 un format compressé (Opus/Ogg, WebM, AAC/M4A, MP3), converti ici par ffmpeg en
 WAV 16 kHz mono. Bornes : taille, durée minimale (appui accidentel) et
 maximale (micro resté ouvert).
+
+Rien ici ne DÉCOUPE l'audio : le fichier part entier à l'ASR, en un seul appel.
+Le découpage en fenêtres de 30 s est interne à Whisper — son encodeur n'accepte
+pas plus — et `faster_whisper` s'en charge seul, puis recolle les segments.
+Vérifié sur la production le 2026-11-17 : 31,4 s de pulaar, onze questions,
+toutes transcrites, y compris après la trentième seconde.
 """
 from __future__ import annotations
 
@@ -16,7 +22,32 @@ import subprocess
 import tempfile
 
 DUREE_MIN_SECONDES = 0.3
-DUREE_MAX_SECONDES = 60.0
+
+#: Durée maximale acceptée, en secondes.
+#:
+#: Ce n'est pas un chiffre rond choisi au hasard : c'est ce que la chaîne sait
+#: réellement servir. Mesuré sur la production le 2026-11-17, le Space ASR
+#: transcrit à environ 1,8 fois le temps réel (31,4 s d'audio → 56,0 s de
+#: calcul). Au-delà d'une trentaine de secondes, l'appel dépassait le délai
+#: HTTP d'`asr_client`, et le citoyen attendait le réessai : 42,7 s d'audio
+#: lui coûtaient 1 min 51 de silence, et faisaient transcrire deux fois le
+#: même fichier au Space, qui ignore que le client a renoncé.
+#:
+#: Mieux vaut le lui dire tout de suite. `asr_client.DELAI_SECONDES` est
+#: calculé à partir d'ici : les deux bornes ne peuvent plus diverger.
+DUREE_MAX_SECONDES = 30.0
+
+#: Tolérance avant de refuser : l'encodage ajoute parfois quelques dixièmes.
+DUREE_TOLERANCE_SECONDES = 1.0
+
+#: Borne donnée à ffmpeg (`-t`). Elle limite le travail de conversion sur un
+#: fichier aberrant, mais reste AU-DESSUS de la durée maximale tolérée — sinon
+#: elle tronquerait à la limite exacte et le contrôle de durée qui suit ne
+#: verrait plus jamais rien dépasser. C'est ce qui se passait avant : le mobile
+#: (WAV) était refusé au-delà d'une minute, pendant que le web (WebM) était
+#: coupé en silence. Même geste du citoyen, deux résultats.
+DUREE_COUPURE_FFMPEG_SECONDES = DUREE_MAX_SECONDES + 15.0
+
 OCTETS_MAX = 10 * 1024 * 1024
 DELAI_CONVERSION_SECONDES = 30
 
@@ -77,7 +108,8 @@ def _convertir_sync(octets: bytes, executable: str) -> bytes:
         # Fichier de sortie (et non un pipe) : l'en-tête WAV contient alors la vraie taille des données.
         resultat = subprocess.run(
             [executable, "-hide_banner", "-loglevel", "error", "-y", "-i", entree,
-             "-t", str(int(DUREE_MAX_SECONDES) + 1), "-ac", "1", "-ar", "16000", "-sample_fmt", "s16", sortie],
+             "-t", str(int(DUREE_COUPURE_FFMPEG_SECONDES)), "-ac", "1", "-ar", "16000",
+             "-sample_fmt", "s16", sortie],
             capture_output=True,
             timeout=DELAI_CONVERSION_SECONDES,
             check=False,
@@ -111,6 +143,9 @@ async def preparer_pour_asr(octets: bytes) -> bytes:
     duree = duree_wav_secondes(octets)
     if duree is not None and duree < DUREE_MIN_SECONDES:
         raise ErreurAudio("audio_trop_court", "Je n'ai rien entendu. Gardez le doigt sur le micro pendant que vous parlez.")
-    if duree is not None and duree > DUREE_MAX_SECONDES + 1:
+    # Ce contrôle s'applique maintenant aux DEUX chemins : le WAV du mobile,
+    # qui arrive tel quel, et le format compressé du web, qui vient d'être
+    # converti sans avoir été tronqué à la limite.
+    if duree is not None and duree > DUREE_MAX_SECONDES + DUREE_TOLERANCE_SECONDES:
         raise ErreurAudio("audio_trop_long", "Votre message est trop long. Parlez un peu moins longtemps à la fois.")
     return octets
